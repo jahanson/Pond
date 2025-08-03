@@ -1,0 +1,39 @@
+# Python-generated files
+__pycache__/
+*.py[oc]
+build/
+dist/
+wheels/
+*.egg-info
+.pytest_cache/
+.coverage
+.mypy_cache/
+.ruff_cache/
+
+# Virtual environments
+.venv
+venv/
+env/
+
+# JavaScript/Node
+node_modules/
+.vite/
+*.log
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# macOS specific files
+.DS_Store
+
+# Project specific
+*.db
+*.sqlite
+.env
+.env.local
+
+# Static build output (will be built during deployment)
+src/pond/static/
