@@ -82,6 +82,9 @@ POND_TIMEZONE=America/Los_Angeles  # Override timezone detection
 DB_POOL_SIZE=10                    # Database connection pool size
 DB_POOL_TIMEOUT=30                 # Seconds to wait for connection
 EMBEDDING_TIMEOUT=60               # Seconds to wait for Ollama
+
+# Security
+API_KEY=your-secret-key-here       # Required for all API calls except /health
 ```
 
 ### Docker Compose Example
@@ -94,6 +97,7 @@ services:
       DATABASE_URL: postgresql://postgres:postgres@db:5432/pond
       OLLAMA_URL: http://ollama:11434
       LOG_FORMAT: pretty
+      API_KEY: ${POND_API_KEY:-development-key-change-me}
     ports:
       - "8000:8000"
     depends_on:
@@ -110,6 +114,19 @@ DATABASE_URL=postgresql://localhost:5432/pond_dev
 OLLAMA_URL=http://localhost:11434
 PORT=8001
 LOG_FORMAT=pretty
+API_KEY=development-key-change-me
+```
+
+### Frontend Configuration
+
+MCP server and CLI need the API key:
+```bash
+# MCP server startup
+POND_API_KEY=your-key-here python -m pond.mcpserver
+
+# CLI usage  
+export POND_API_KEY=your-key-here
+pond recent --tenant claude
 ```
 
 ## Core Architecture
@@ -346,6 +363,26 @@ class RecentResponse:
 ```
 
 #### Middleware
+
+**Security Middleware**
+```python
+async def api_key_middleware(request: Request, call_next):
+    # Skip auth for health check
+    if request.url.path == "/api/v1/health":
+        return await call_next(request)
+    
+    # Check API key
+    api_key = request.headers.get("X-API-Key")
+    if not api_key or api_key != settings.api_key:
+        return JSONResponse(
+            status_code=401,
+            content={"error": "Unauthorized"}
+        )
+    
+    return await call_next(request)
+```
+
+**Request Tracking Middleware**
 - Request ID generation (UUID) for every request
 - Add X-Request-ID header to all responses
 - Request logging with IDs
@@ -487,6 +524,12 @@ This happens automatically on first request to a new tenant.
    - The TimeService handles all display formatting at the last moment
 
 6. **Multi-tenancy**: Complete isolation via PostgreSQL schemas (one schema per tenant).
+
+7. **Security**: Simple API key authentication suitable for localhost:
+   - Single shared key from environment variable
+   - Required header: `X-API-Key: <key>`
+   - Health check endpoint is public
+   - No complex auth flows for local-only service
 
 ## What We're NOT Building (Yet)
 

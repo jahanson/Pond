@@ -111,7 +111,11 @@ async def test_client(test_db: str, test_tenant: str) -> AsyncGenerator[AsyncCli
     settings.db_name = test_db
     
     # The test client will use test_tenant in URLs
-    async with AsyncClient(app=app, base_url="http://test") as client:
+    async with AsyncClient(
+        app=app, 
+        base_url="http://test",
+        headers={"X-API-Key": settings.api_key or "test-key"}
+    ) as client:
         # Store tenant name for tests to use
         client.test_tenant = test_tenant
         yield client

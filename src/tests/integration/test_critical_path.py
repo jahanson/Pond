@@ -88,7 +88,11 @@ async def test_tenant_isolation(test_db, mock_ollama_response):
         """)
         
         # Now test with the API
-        async with AsyncClient(app=app, base_url="http://test") as client:
+        async with AsyncClient(
+            app=app, 
+            base_url="http://test",
+            headers={"X-API-Key": settings.api_key or "test-key"}
+        ) as client:
             # Store memory for Claude
             await client.post("/api/v1/claude/store", json={
                 "content": "Claude's private thought about Python",
