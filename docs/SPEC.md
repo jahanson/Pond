@@ -2,6 +2,32 @@
 
 This document provides the detailed implementation plan for Pond, bridging our design vision with our test requirements.
 
+## Deployment
+
+### Containerization
+
+Pond is designed to run in Docker containers for:
+- Auto-start on system boot
+- Easy management via Docker Desktop
+- Resource isolation
+- Consistent environment
+
+```dockerfile
+# Dockerfile
+FROM python:3.11-slim
+WORKDIR /app
+COPY pyproject.toml ./
+RUN pip install -e .
+COPY . .
+CMD ["python", "-m", "pond.server"]
+```
+
+Container considerations:
+- Health checks must work within container constraints
+- No meaningful host disk space metrics
+- Use Docker health check mechanism
+- Log to stdout for Docker log collection
+
 ## Package Structure
 
 ```
@@ -363,8 +389,7 @@ logger.info("memory.stored",
     length=len(content),
     tag_count=len(tags),
     entity_count=len(entities),
-    splashback_count=len(splashback),
-    splashback_similarities=[m.similarity for m in splashback]
+    splashback_count=len(splashback)
 )
 
 # BAD - never log actual memory content!
@@ -417,7 +442,7 @@ embedding_cache_hit_rate = Counter('pond_embedding_cache_hits',
 
 ### Health Checks
 
-Enhanced health endpoint should return:
+Health endpoint should return what we CAN meaningfully observe in a container:
 ```json
 {
   "status": "healthy",
@@ -431,13 +456,7 @@ Enhanced health endpoint should return:
     },
     "ollama": {
       "status": "healthy", 
-      "model_loaded": true,
       "response_time_ms": 45
-    },
-    "disk_space": {
-      "status": "healthy",
-      "free_gb": 123,
-      "used_percent": 45
     }
   },
   "version": "1.0.0",
