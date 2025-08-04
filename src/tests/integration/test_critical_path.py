@@ -105,18 +105,18 @@ async def test_search_by_semantic_similarity(test_client, mock_ollama_response):
     """Test semantic search finds related memories."""
     # Store memories about different topics
     await test_client.post("/api/v1/test_tenant/store", json={
-        "content": "Sparkle stole pizza again"
+        "content": "Sparkle the cat stole pizza again"
     })
     await test_client.post("/api/v1/test_tenant/store", json={
         "content": "Python debugging is frustrating"
     })
     await test_client.post("/api/v1/test_tenant/store", json={
-        "content": "Sparkle's criminal activities continue"
+        "content": "My cat Sparkle's criminal activities continue"
     })
     
     # Search for cat-related memories
     response = await test_client.post("/api/v1/test_tenant/search", json={
-        "query": "cat theft",
+        "query": "feline mischief",
         "limit": 10
     })
     
