@@ -56,6 +56,62 @@ Usage:
 - `uv run python -m pond.mcpserver` - Start MCP server
 - `uv run pond [command]` - CLI commands
 
+## Configuration
+
+### Environment Variables
+
+All configuration via environment variables for container compatibility:
+
+```bash
+# Required
+DATABASE_URL=postgresql://user:pass@localhost:5432/pond  # Database name configurable!
+
+# Optional with defaults
+PORT=8000                          # REST API port
+OLLAMA_URL=http://localhost:11434  # Ollama base URL
+LOG_LEVEL=INFO                     # DEBUG, INFO, WARNING, ERROR
+LOG_FORMAT=json                    # json or pretty (for development)
+
+# MCP Server specific (when we build it)
+MCP_TENANT=claude                  # Which tenant this MCP server represents
+
+# Time Service
+POND_TIMEZONE=America/Los_Angeles  # Override timezone detection
+
+# Performance tuning
+DB_POOL_SIZE=10                    # Database connection pool size
+DB_POOL_TIMEOUT=30                 # Seconds to wait for connection
+EMBEDDING_TIMEOUT=60               # Seconds to wait for Ollama
+```
+
+### Docker Compose Example
+
+```yaml
+services:
+  pond:
+    image: pond:latest
+    environment:
+      DATABASE_URL: postgresql://postgres:postgres@db:5432/pond
+      OLLAMA_URL: http://ollama:11434
+      LOG_FORMAT: pretty
+    ports:
+      - "8000:8000"
+    depends_on:
+      - db
+      - ollama
+```
+
+### Local Development
+
+For `uv run` outside Docker:
+```bash
+# .env.local (gitignored)
+DATABASE_URL=postgresql://localhost:5432/pond_dev
+OLLAMA_URL=http://localhost:11434
+PORT=8001
+LOG_FORMAT=pretty
+```
+
 ## Core Architecture
 
 ### Services Layer (REST API Only)
@@ -154,13 +210,36 @@ class TimeService:
 
 ### Database Layer
 
-#### Schema
-```sql
-CREATE EXTENSION IF NOT EXISTS vector;
+#### Database Architecture
+- **One database** - name from DATABASE_URL (default: `pond`)
+- **Multiple schemas** - one per tenant (`claude`, `alpha`, etc.)
+- **Schema isolation** - each tenant's data in separate schema
+- **Test isolation** - use different database name (e.g., `pond_test`)
 
+Example structure:
+```
+Database: pond
+├── Schema: claude
+│   └── Table: memories
+├── Schema: alpha
+│   └── Table: memories
+└── Schema: public (unused)
+```
+
+#### Schema Creation (per tenant)
+```sql
+-- Create schema for new tenant
+CREATE SCHEMA IF NOT EXISTS claude;
+
+-- Switch to tenant schema
+SET search_path TO claude;
+
+-- Enable pgvector in this schema
+CREATE EXTENSION IF NOT EXISTS vector SCHEMA claude;
+
+-- Create tables in tenant schema
 CREATE TABLE memories (
     id SERIAL PRIMARY KEY,
-    tenant TEXT NOT NULL,
     content TEXT NOT NULL,
     summary TEXT,
     tags JSONB DEFAULT '[]',
@@ -171,17 +250,16 @@ CREATE TABLE memories (
     active BOOLEAN DEFAULT true
 );
 
-CREATE INDEX idx_memories_tenant ON memories(tenant);
 CREATE INDEX idx_memories_created_at ON memories(created_at);
 CREATE INDEX idx_memories_embedding ON memories USING ivfflat (embedding vector_cosine_ops);
 CREATE INDEX idx_memories_entities ON memories USING gin(entities);
 ```
 
 #### Connection Management
-- Use asyncpg for async PostgreSQL
-- Connection string from environment
-- Separate database per tenant (pond_claude, pond_alpha, etc.)
-- Pool connections appropriately
+- Parse database name from DATABASE_URL
+- Use asyncpg for async PostgreSQL  
+- Schema selection: `SET search_path TO {tenant}`
+- Pool connections at database level
 
 ### API Layer
 
@@ -347,7 +425,7 @@ async def get_splashback(tenant: str, embedding: List[float]) -> List[Memory]:
    - Display: Convert to AI's timezone only in response formatting
    - The TimeService handles all display formatting at the last moment
 
-6. **Multi-tenancy**: Complete isolation via tenant field. Future: separate databases.
+6. **Multi-tenancy**: Complete isolation via PostgreSQL schemas (one schema per tenant).
 
 ## What We're NOT Building (Yet)
 
