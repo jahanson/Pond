@@ -9,7 +9,7 @@ from unittest.mock import patch, AsyncMock
 import pytest
 from freezegun import freeze_time
 
-from pond.services.time_service import TimeService
+from pond.utils.time_service import TimeService
 
 
 class TestTimeServiceFormatting:

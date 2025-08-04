@@ -11,7 +11,7 @@ This document summarizes what the test suite tells us about how Pond should work
 - Returns 768-dimensional float vector
 - On connection error, raises Exception with "embedding service" in message
 
-### 2. Time Service (`pond.services.time_service`)
+### 2. Time Service (`pond.utils.time_service`)
 - **Class**: `TimeService(timezone: Optional[str] = None)`
 - **Methods**:
   - `now() -> datetime` - Returns current UTC datetime (timezone-aware)

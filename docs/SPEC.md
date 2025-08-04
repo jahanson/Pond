@@ -2,47 +2,39 @@
 
 This document provides the detailed implementation plan for Pond, bridging our design vision with our test requirements.
 
-## Core Architecture
+## Package Structure
 
-### Services Layer
-
-#### 1. Time Service (`pond.services.time_service`)
-```python
-class TimeService:
-    def __init__(self, timezone: Optional[str] = None):
-        # Timezone detection order: param -> env -> geoip -> UTC
-        pass
-    
-    def now(self) -> datetime:
-        # Always returns UTC datetime with timezone info
-        return datetime.now(ZoneInfo("UTC"))
-    
-    def format_date(self, dt: datetime) -> str:
-        # "Monday, August 4, 2025"
-        # Convert to service timezone first
-        pass
-    
-    def format_time(self, dt: datetime) -> str:
-        # "7:03 a.m. PDT"
-        # Include timezone abbreviation
-        pass
-    
-    def format_age(self, dt: datetime) -> str:
-        # "26 hours ago" or "in 5 minutes"
-        # Relative to now()
-        pass
-    
-    def parse_interval(self, interval: str) -> timedelta:
-        # "1 hour", "3 days", "yesterday"
-        # Case insensitive
-        pass
-    
-    def parse_datetime(self, dt_str: str) -> datetime:
-        # Multiple format support
-        pass
+```
+pond/
+├── __init__.py           # CLI entry point
+├── __main__.py          # Allow "python -m pond"
+├── server/              # REST API server
+│   ├── __init__.py
+│   ├── __main__.py      # "python -m pond.server"
+│   └── ...
+├── mcpserver/           # MCP server
+│   ├── __init__.py
+│   ├── __main__.py      # "python -m pond.mcpserver"
+│   └── ...
+├── services/            # Core business logic
+│   ├── embeddings.py
+│   ├── validation.py
+│   └── entities.py
+└── utils/               # Shared utilities
+    ├── __init__.py
+    └── time_service.py  # Shared by MCP and CLI
 ```
 
-#### 2. Embeddings Service (`pond.services.embeddings`)
+Usage:
+- `uv run python -m pond.server` - Start REST API
+- `uv run python -m pond.mcpserver` - Start MCP server
+- `uv run pond [command]` - CLI commands
+
+## Core Architecture
+
+### Services Layer (REST API Only)
+
+#### 1. Embeddings Service (`pond.services.embeddings`)
 ```python
 async def get_embedding(text: str) -> List[float]:
     # POST to http://localhost:11434/api/embeddings
@@ -52,7 +44,7 @@ async def get_embedding(text: str) -> List[float]:
     pass
 ```
 
-#### 3. Validation Service (`pond.services.validation`)
+#### 2. Validation Service (`pond.services.validation`)
 ```python
 def validate_memory_length(content: str) -> bool:
     # Max 7500 chars
@@ -92,6 +84,46 @@ def generate_auto_tags(text: str, entities: List[Dict]) -> List[str]:
     # Include significant nouns
     # All normalized via normalize_tag
     pass
+```
+
+### Shared Utilities Layer
+
+#### Time Service (`pond.utils.time_service`)
+```python
+# Shared by MCP server and CLI for human-readable time formatting
+# NOT used by REST API (which uses ISO 8601)
+class TimeService:
+    def __init__(self, timezone: Optional[str] = None):
+        # Timezone detection order: param -> env -> geoip -> UTC
+        pass
+    
+    def now(self) -> datetime:
+        # Always returns UTC datetime with timezone info
+        return datetime.now(ZoneInfo("UTC"))
+    
+    def format_date(self, dt: datetime) -> str:
+        # "Monday, August 4, 2025"
+        # Convert to service timezone first
+        pass
+    
+    def format_time(self, dt: datetime) -> str:
+        # "7:03 a.m. PDT"
+        # Include timezone abbreviation
+        pass
+    
+    def format_age(self, dt: datetime) -> str:
+        # "26 hours ago" or "in 5 minutes"
+        # Relative to now()
+        pass
+    
+    def parse_interval(self, interval: str) -> timedelta:
+        # "1 hour", "3 days", "yesterday"
+        # Used by CLI for commands like "pond recent --since yesterday"
+        pass
+    
+    def parse_datetime(self, dt_str: str) -> datetime:
+        # Multiple format support for CLI input
+        pass
 ```
 
 ### Database Layer
@@ -142,7 +174,7 @@ class Memory:
     entities: List[Dict[str, str]]
     actions: List[str]
     similarity: Optional[float]  # Only in splashback
-    created_at: str  # Formatted by time service
+    created_at: str  # ISO 8601 UTC (e.g., "2025-08-04T14:03:00Z")
 
 class StoreMemoryResponse:
     splashback: List[Memory]
