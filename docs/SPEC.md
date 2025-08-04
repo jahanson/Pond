@@ -347,9 +347,9 @@ class InitResponse:
     recent_memories: List[str]  # Just content strings
 
 class SearchRequest:
-    query: Optional[str]  # For semantic search
-    entity: Optional[str]  # For entity search
+    query: str  # Always required - we decompose it
     limit: int = 10
+    # Future: filters for time ranges, specific entities, etc.
 
 class SearchResponse:
     memories: List[str]  # Just content strings for now
@@ -526,10 +526,87 @@ async def create_tenant_schema(tenant_name: str):
 This happens automatically on first request to a new tenant.
 
 #### Search Implementation
-- Semantic search: Get embedding of query, find similar
-- Entity search: Query entities JSONB field
-- Can combine both in future
-- Always respect tenant isolation
+
+**Multi-faceted Search Approach**
+
+When a search query comes in, decompose it just like we decompose memories:
+
+```python
+async def search_memories(query: str, tenant: str) -> List[Memory]:
+    # 1. Decompose query using spaCy
+    entities = extract_entities(query)      # ["Sparkle", "FastMCP"]
+    actions = extract_actions(query)        # ["debug", "implement"]
+    time_markers = extract_time(query)      # "yesterday", "last week"
+    
+    # 2. Run parallel searches
+    results = await asyncio.gather(
+        search_by_entities(tenant, entities),
+        search_by_actions(tenant, actions),
+        search_by_similarity(tenant, query),
+        search_by_time(tenant, time_markers) if time_markers else []
+    )
+    
+    # 3. Merge and score
+    all_memories = merge_and_dedupe(results)
+    scored_memories = score_results(all_memories, query_data)
+    
+    return sorted(scored_memories, key=lambda m: m.score, reverse=True)
+```
+
+**Scoring Algorithm**
+
+Simple linear scoring:
+
+```python
+def score_memory(memory: Memory, query_data: QueryData) -> float:
+    score = 0.0
+    
+    # Entity matches (1 point each)
+    for entity in query_data.entities:
+        if entity in memory.entities:
+            score += 1.0
+    
+    # Action matches (1 point each)
+    for action in query_data.actions:
+        if action in memory.actions:
+            score += 1.0
+    
+    # Tag matches (0.5 points each)
+    for tag in query_data.tags:
+        if tag in memory.tags:
+            score += 0.5
+    
+    # Cosine similarity (0-1 points)
+    score += memory.similarity_to_query
+    
+    # Age penalty (reduce score for older memories)
+    days_old = (now() - memory.created_at).days
+    score -= (days_old * 0.001)  # -0.001 per day, tunable
+    
+    return max(0, score)  # Never go negative
+```
+
+**Search Types**
+
+1. **Entity Search**: Direct JSONB query on entities field
+2. **Action Search**: Direct JSONB query on actions field  
+3. **Similarity Search**: pgvector similarity with query embedding
+4. **Time Search**: Filter by created_at ranges
+
+**Query Examples**
+
+- "What did I debug with Sparkle yesterday?"
+  - Entities: ["Sparkle"] → entity search
+  - Actions: ["debug"] → action search
+  - Time: "yesterday" → filter last 24h
+  - Full query → similarity search
+
+- "FastMCP validation errors"
+  - Entities: ["FastMCP"] → entity search
+  - Keywords → similarity search
+  - High scores: memories with both entity match AND similarity
+
+Always respect tenant isolation in all search types.
 
 ## Testing Strategy
 
