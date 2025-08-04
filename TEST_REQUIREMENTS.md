@@ -27,7 +27,7 @@ This document summarizes what the test suite tells us about how Pond should work
 - **Functions**:
   - `validate_memory_length(content: str) -> bool` - Max 7500 chars, reject empty/whitespace
   - `normalize_tag(tag: str) -> str` - Lowercase, singular form, hyphens for spaces, no special chars
-  - `validate_tags(tags: List[str]) -> bool` - Max 20 tags allowed
+  - `validate_tags(tags: List[str]) -> bool` - Validates tag format (no count limit)
 
 ## API Endpoints
 

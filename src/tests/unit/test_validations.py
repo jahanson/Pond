@@ -76,11 +76,6 @@ class TestTagValidation:
         tags = ["python", "debugging", "async"]
         assert validate_tags(tags) is True
     
-    def test_too_many_tags(self):
-        """Test rejection of too many tags."""
-        tags = [f"tag{i}" for i in range(21)]  # 21 tags
-        assert validate_tags(tags) is False
-    
     def test_empty_tags_allowed(self):
         """Test that empty tag list is valid."""
         assert validate_tags([]) is True
