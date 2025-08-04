@@ -38,6 +38,7 @@ class Settings(BaseSettings):
 
     # Time handling
     pond_timezone: str | None = None
+    geoip_url: str | None = "https://ipapi.co/json/"
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
