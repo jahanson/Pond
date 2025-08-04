@@ -15,16 +15,56 @@ from pond.services.time_service import TimeService
 class TestTimeServiceFormatting:
     """Test time formatting for AI consumption."""
     
-    @freeze_time("2024-08-03 20:15:00", tz_offset=0)  # UTC time
-    def test_format_for_ai_with_timezone(self):
-        """Test formatting converts to local timezone."""
+    @freeze_time("2025-08-04 14:03:00", tz_offset=0)  # UTC time
+    def test_format_date(self):
+        """Test formatting date in human-readable format."""
         service = TimeService(timezone="America/Los_Angeles")
         
         utc_time = datetime.now(ZoneInfo("UTC"))
-        formatted = service.format_for_ai(utc_time)
+        formatted = service.format_date(utc_time)
         
-        # Should be 13:15 in LA when it's 20:15 UTC
-        assert formatted == "2024-08-03 13:15:00 PDT (America/Los_Angeles)"
+        # Should be Monday in LA when it's 14:03 UTC
+        assert formatted == "Monday, August 4, 2025"
+    
+    @freeze_time("2025-08-04 14:03:00", tz_offset=0)  # UTC time
+    def test_format_time(self):
+        """Test formatting time in human-readable format."""
+        service = TimeService(timezone="America/Los_Angeles")
+        
+        utc_time = datetime.now(ZoneInfo("UTC"))
+        formatted = service.format_time(utc_time)
+        
+        # Should be 7:03 AM PDT in LA
+        assert formatted == "7:03 a.m. PDT"
+    
+    @freeze_time("2025-08-04 14:03:00", tz_offset=0)  # UTC time
+    def test_format_age(self):
+        """Test formatting relative age of datetime."""
+        service = TimeService(timezone="America/Los_Angeles")
+        
+        # Test various time differences
+        now = datetime.now(ZoneInfo("UTC"))
+        
+        # Seconds ago
+        assert service.format_age(now - timedelta(seconds=30)) == "30 seconds ago"
+        assert service.format_age(now - timedelta(seconds=1)) == "1 second ago"
+        
+        # Minutes ago
+        assert service.format_age(now - timedelta(minutes=5)) == "5 minutes ago"
+        assert service.format_age(now - timedelta(minutes=1)) == "1 minute ago"
+        
+        # Hours ago
+        assert service.format_age(now - timedelta(hours=3)) == "3 hours ago"
+        assert service.format_age(now - timedelta(hours=1)) == "1 hour ago"
+        assert service.format_age(now - timedelta(hours=26)) == "26 hours ago"
+        
+        # Days ago
+        assert service.format_age(now - timedelta(days=2)) == "2 days ago"
+        assert service.format_age(now - timedelta(days=1)) == "1 day ago"
+        
+        # Future times
+        assert service.format_age(now + timedelta(hours=1)) == "in 1 hour"
+        assert service.format_age(now + timedelta(minutes=30)) == "in 30 minutes"
     
     @freeze_time("2024-12-03 20:15:00", tz_offset=0)  # UTC time in winter
     def test_format_handles_dst_changes(self):
@@ -32,25 +72,25 @@ class TestTimeServiceFormatting:
         service = TimeService(timezone="America/Los_Angeles")
         
         utc_time = datetime.now(ZoneInfo("UTC"))
-        formatted = service.format_for_ai(utc_time)
+        formatted = service.format_time(utc_time)
         
         # Should be PST in winter, not PDT
-        assert formatted == "2024-12-03 12:15:00 PST (America/Los_Angeles)"
+        assert formatted == "12:15 p.m. PST"
     
     def test_format_with_different_timezones(self):
         """Test formatting works with various timezones."""
         utc_time = datetime(2024, 8, 3, 20, 15, 0, tzinfo=ZoneInfo("UTC"))
         
-        # Test multiple timezones
+        # Test multiple timezones for time formatting
         cases = [
-            ("America/New_York", "2024-08-03 16:15:00 EDT (America/New_York)"),
-            ("Europe/London", "2024-08-03 21:15:00 BST (Europe/London)"),
-            ("Asia/Tokyo", "2024-08-04 05:15:00 JST (Asia/Tokyo)"),
+            ("America/New_York", "4:15 p.m. EDT"),
+            ("Europe/London", "9:15 p.m. BST"),
+            ("Asia/Tokyo", "5:15 a.m. JST"),
         ]
         
         for tz, expected in cases:
             service = TimeService(timezone=tz)
-            assert service.format_for_ai(utc_time) == expected
+            assert service.format_time(utc_time) == expected
 
 
 class TestTimeServiceParsing:
@@ -175,5 +215,5 @@ class TestTimeServiceIntegration:
         since = now - interval
         
         # Format both for display
-        assert service.format_for_ai(since) == "2024-08-03 07:15:00 PDT (America/Los_Angeles)"
-        assert service.format_for_ai(now) == "2024-08-03 13:15:00 PDT (America/Los_Angeles)"
+        assert service.format_time(since) == "7:15 a.m. PDT"
+        assert service.format_time(now) == "1:15 p.m. PDT"
