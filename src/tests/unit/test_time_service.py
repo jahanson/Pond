@@ -15,12 +15,20 @@ from pond.services.time_service import TimeService
 class TestTimeServiceFormatting:
     """Test time formatting for AI consumption."""
     
+    def test_now_returns_utc_datetime(self):
+        """Test that now() returns timezone-aware UTC datetime."""
+        service = TimeService()
+        current = service.now()
+        
+        assert current.tzinfo is not None
+        assert current.tzinfo.tzname(current) == "UTC"
+    
     @freeze_time("2025-08-04 14:03:00", tz_offset=0)  # UTC time
     def test_format_date(self):
         """Test formatting date in human-readable format."""
         service = TimeService(timezone="America/Los_Angeles")
         
-        utc_time = datetime.now(ZoneInfo("UTC"))
+        utc_time = service.now()
         formatted = service.format_date(utc_time)
         
         # Should be Monday in LA when it's 14:03 UTC
@@ -31,7 +39,7 @@ class TestTimeServiceFormatting:
         """Test formatting time in human-readable format."""
         service = TimeService(timezone="America/Los_Angeles")
         
-        utc_time = datetime.now(ZoneInfo("UTC"))
+        utc_time = service.now()
         formatted = service.format_time(utc_time)
         
         # Should be 7:03 AM PDT in LA
@@ -43,7 +51,7 @@ class TestTimeServiceFormatting:
         service = TimeService(timezone="America/Los_Angeles")
         
         # Test various time differences
-        now = datetime.now(ZoneInfo("UTC"))
+        now = service.now()
         
         # Seconds ago
         assert service.format_age(now - timedelta(seconds=30)) == "30 seconds ago"
@@ -71,7 +79,7 @@ class TestTimeServiceFormatting:
         """Test formatting handles daylight saving time."""
         service = TimeService(timezone="America/Los_Angeles")
         
-        utc_time = datetime.now(ZoneInfo("UTC"))
+        utc_time = service.now()
         formatted = service.format_time(utc_time)
         
         # Should be PST in winter, not PDT
@@ -211,7 +219,7 @@ class TestTimeServiceIntegration:
         
         # "last 6 hours" from current time
         interval = service.parse_interval("last 6 hours")
-        now = datetime.now(ZoneInfo("UTC"))
+        now = service.now()
         since = now - interval
         
         # Format both for display

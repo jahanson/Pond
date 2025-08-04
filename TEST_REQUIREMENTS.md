@@ -14,6 +14,7 @@ This document summarizes what the test suite tells us about how Pond should work
 ### 2. Time Service (`pond.services.time_service`)
 - **Class**: `TimeService(timezone: Optional[str] = None)`
 - **Methods**:
+  - `now() -> datetime` - Returns current UTC datetime (timezone-aware)
   - `format_date(dt: datetime) -> str` - Format: "Monday, August 4, 2025"
   - `format_time(dt: datetime) -> str` - Format: "7:03 a.m. PDT"
   - `format_age(dt: datetime) -> str` - Format: "26 hours ago" (relative to now)
