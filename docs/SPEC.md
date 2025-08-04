@@ -224,8 +224,19 @@ async def get_splashback(tenant: str, embedding: List[float]) -> List[Memory]:
     # Order by similarity descending
     # Limit to 3 results
     # Include all memory fields in response
+    # IMPORTANT: Empty splashback is valid and meaningful!
+    # It indicates the AI is exploring new conceptual territory
     pass
 ```
+
+**Design Decision: Threshold-Based Splashback**
+- We only return memories above 0.7 similarity threshold
+- We do NOT always return top 3 regardless of similarity
+- Empty splashback is intentional and informative
+- Rationale: 
+  - Early days: Unrelated memories would be confusing for identity formation
+  - Established AI: Unrelated memories are wasteful noise when exploring new topics
+  - Empty splashback signals "this is new territory" which is valuable information
 
 #### Memory Storage Flow
 1. Validate memory length
@@ -299,7 +310,10 @@ async def get_splashback(tenant: str, embedding: List[float]) -> List[Memory]:
 
 3. **Tag Philosophy**: Tags are normalized but unlimited in count. User tags and auto-generated tags are merged.
 
-4. **Splashback Range**: 0.7-0.9 similarity is the "sweet spot" - related but not duplicate.
+4. **Splashback Range**: 
+   - 0.7-0.9 similarity is the "sweet spot" - related but not duplicate
+   - Empty splashback is valid when no memories meet threshold
+   - We don't force unrelated memories just to fill the response
 
 5. **Time Handling**: 
    - Database: Always store as UTC with timezone (TIMESTAMPTZ)
