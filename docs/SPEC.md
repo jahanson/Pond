@@ -210,6 +210,48 @@ class TimeService:
 
 ### Database Layer
 
+#### Migration Management (Alembic)
+
+We use Alembic from day one to manage schema changes:
+
+```python
+# alembic/env.py - Custom logic for multi-schema migrations
+async def run_migrations_online():
+    """Run migrations on all tenant schemas."""
+    connectable = create_async_engine(DATABASE_URL)
+    
+    async with connectable.connect() as connection:
+        # Get all tenant schemas
+        result = await connection.execute(
+            "SELECT schema_name FROM information_schema.schemata "
+            "WHERE schema_name NOT IN ('public', 'information_schema', 'pg_catalog')"
+        )
+        schemas = [row[0] for row in result]
+        
+        # Run migration on each schema
+        for schema in schemas:
+            await connection.execute(f"SET search_path TO {schema}")
+            await connection.run_sync(do_run_migrations)
+```
+
+Migration commands:
+```bash
+# Create new migration
+alembic revision -m "add_entities_field"
+
+# Run migrations (all schemas)
+alembic upgrade head
+
+# Rollback one version
+alembic downgrade -1
+```
+
+Special considerations:
+- pgvector extension must be created per schema
+- Each migration runs on ALL tenant schemas
+- New tenant creation must run all migrations
+- Test database gets migrations too
+
 #### Database Architecture
 - **One database** - name from DATABASE_URL (default: `pond`)
 - **Multiple schemas** - one per tenant (`claude`, `alpha`, etc.)
@@ -353,6 +395,24 @@ async def get_splashback(tenant: str, embedding: List[float]) -> List[Memory]:
 8. Get splashback memories
 9. Return splashback
 
+#### New Tenant Creation Flow
+```python
+async def create_tenant_schema(tenant_name: str):
+    """Create schema for new tenant and run all migrations."""
+    async with get_db_connection() as conn:
+        # Create schema
+        await conn.execute(f'CREATE SCHEMA IF NOT EXISTS "{tenant_name}"')
+        
+        # Switch to new schema
+        await conn.execute(f'SET search_path TO "{tenant_name}"')
+        
+        # Run all migrations on new schema
+        # This ensures new tenants get current schema
+        await run_alembic_migrations(conn, tenant_name)
+```
+
+This happens automatically on first request to a new tenant.
+
 #### Search Implementation
 - Semantic search: Get embedding of query, find similar
 - Entity search: Query entities JSONB field
@@ -379,8 +439,9 @@ async def get_splashback(tenant: str, embedding: List[float]) -> List[Memory]:
    - Embeddings service with Ollama client
 
 2. **Phase 2: Database Layer**
-   - Schema creation
-   - Connection management
+   - Alembic setup with multi-schema support
+   - Initial migration (create memories table)
+   - Connection management with schema switching
    - Basic CRUD operations
 
 3. **Phase 3: Entity Extraction**
