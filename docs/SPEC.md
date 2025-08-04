@@ -360,6 +360,18 @@ class RecentRequest:
 
 class RecentResponse:
     memories: List[str]  # Just content strings for now
+
+class TenantHealthResponse:
+    status: str  # "healthy", "empty", "inactive"
+    tenant: str
+    stats: Dict  # Memory counts, date ranges, velocity
+    # Exact shape TBD based on implementation experience
+    # Ideas to explore:
+    # - memory_count, earliest/latest memory
+    # - activity patterns (velocity, peak times)
+    # - entity/tag statistics
+    # - splashback effectiveness metrics
+    # - storage usage
 ```
 
 #### Middleware
@@ -394,7 +406,10 @@ All routes under `/api/v1/{tenant}/`:
 - `POST /init` - Get context and recent memories
 - `POST /search` - Semantic or entity search
 - `POST /recent` - Get recent memories by time
-- `GET /health` - Health check (no tenant)
+- `GET /health` - Tenant-specific health and statistics
+
+Global health check:
+- `GET /api/v1/health` - System health (no auth required)
 
 ### Core Logic
 
@@ -498,6 +513,7 @@ This happens automatically on first request to a new tenant.
    - Splashback implementation
    - Search (semantic and entity)
    - Init endpoint
+   - Basic tenant health endpoint (minimal implementation)
 
 6. **Phase 6: Polish**
    - Comprehensive error handling
@@ -539,6 +555,7 @@ This happens automatically on first request to a new tenant.
 4. **Memory Relationships**: No explicit linking between memories
 5. **Versioning**: No memory versions or edit history
 6. **Caching**: No Redis or response caching yet
+7. **Full Tenant Health Stats**: Endpoint exists but returns minimal data initially
 
 ## Logging and Observability
 
