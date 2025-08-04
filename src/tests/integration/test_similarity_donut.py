@@ -8,12 +8,12 @@ import pytest
 async def test_splashback_excludes_too_similar(test_client, mock_ollama_response):
     """Test that nearly identical memories don't splash back."""
     # Store original memory
-    await test_client.post("/api/v1/test_tenant/store", json={
+    await test_client.post(f"/api/v1/{test_client.test_tenant}/store", json={
         "content": "Sparkle stole pizza from the counter"
     })
     
     # Store nearly identical memory (just punctuation difference)
-    response = await test_client.post("/api/v1/test_tenant/store", json={
+    response = await test_client.post(f"/api/v1/{test_client.test_tenant}/store", json={
         "content": "Sparkle stole pizza from the counter!"
     })
     
@@ -30,12 +30,12 @@ async def test_splashback_excludes_too_similar(test_client, mock_ollama_response
 async def test_splashback_includes_sweet_spot(test_client, mock_ollama_response):
     """Test that moderately similar memories do splash back."""
     # Store related memories
-    await test_client.post("/api/v1/test_tenant/store", json={
+    await test_client.post(f"/api/v1/{test_client.test_tenant}/store", json={
         "content": "Sparkle's pizza heist last Tuesday"
     })
     
     # Store new memory that should trigger splashback
-    response = await test_client.post("/api/v1/test_tenant/store", json={
+    response = await test_client.post(f"/api/v1/{test_client.test_tenant}/store", json={
         "content": "Sparkle committed bacon theft this morning"
     })
     
@@ -54,12 +54,12 @@ async def test_splashback_includes_sweet_spot(test_client, mock_ollama_response)
 async def test_splashback_excludes_unrelated(test_client, mock_ollama_response):
     """Test that unrelated memories don't splash back."""
     # Store unrelated memories
-    await test_client.post("/api/v1/test_tenant/store", json={
+    await test_client.post(f"/api/v1/{test_client.test_tenant}/store", json={
         "content": "Python debugging is frustrating sometimes"
     })
     
     # Store cat memory
-    response = await test_client.post("/api/v1/test_tenant/store", json={
+    response = await test_client.post(f"/api/v1/{test_client.test_tenant}/store", json={
         "content": "Sparkle is napping in the sunbeam"
     })
     
@@ -91,12 +91,12 @@ async def test_donut_parameters_tunable(test_client, mock_ollama_response):
     ]
     
     for memory in memories:
-        await test_client.post("/api/v1/test_tenant/store", json={
+        await test_client.post(f"/api/v1/{test_client.test_tenant}/store", json={
             "content": memory
         })
     
     # Query with something in the middle
-    response = await test_client.post("/api/v1/test_tenant/store", json={
+    response = await test_client.post(f"/api/v1/{test_client.test_tenant}/store", json={
         "content": "Sparkle is our pet cat"
     })
     

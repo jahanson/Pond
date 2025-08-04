@@ -1,14 +1,19 @@
 """
 Critical path tests for Pond's core functionality.
 """
+import asyncpg
 import pytest
+from httpx import AsyncClient
+
+from pond.api.main import app
+from pond.config import settings
 
 
 @pytest.mark.asyncio
 async def test_store_memory_with_splashback(test_client, mock_ollama_response):
     """Test that storing a memory returns relevant splashback memories."""
     # Store first memory about Sparkle
-    response1 = await test_client.post("/api/v1/test_tenant/store", json={
+    response1 = await test_client.post(f"/api/v1/{test_client.test_tenant}/store", json={
         "content": "Sparkle stole pizza from the counter",
         "tags": ["sparkle", "theft", "pizza"]
     })
@@ -17,7 +22,7 @@ async def test_store_memory_with_splashback(test_client, mock_ollama_response):
     assert data1["splashback"] == []  # First memory has no splashback
     
     # Store second memory about Sparkle
-    response2 = await test_client.post("/api/v1/test_tenant/store", json={
+    response2 = await test_client.post(f"/api/v1/{test_client.test_tenant}/store", json={
         "content": "Sparkle stole bacon this morning",
         "tags": ["sparkle", "theft", "bacon"]
     })
@@ -31,43 +36,100 @@ async def test_store_memory_with_splashback(test_client, mock_ollama_response):
 
 
 @pytest.mark.asyncio
-async def test_tenant_isolation(test_client, mock_ollama_response):
+async def test_tenant_isolation(test_db, mock_ollama_response):
     """Test that memories are isolated between tenants."""
-    # Store memory for Claude
-    await test_client.post("/api/v1/claude/store", json={
-        "content": "Claude's private thought about Python",
-        "tags": ["python", "private"]
-    })
+    # This test needs special handling to test actual multi-tenancy
+    # We'll create two separate tenant schemas and verify isolation
     
-    # Store memory for Alpha
-    await test_client.post("/api/v1/alpha/store", json={
-        "content": "Alpha's private thought about JavaScript",
-        "tags": ["javascript", "private"]
-    })
+    # Create connections for setup
+    conn = await asyncpg.connect(
+        host=settings.db_host,
+        port=settings.db_port,
+        user=settings.db_user,
+        password=settings.db_password,
+        database=test_db,
+    )
     
-    # Search Claude's memories
-    claude_response = await test_client.post("/api/v1/claude/search", json={
-        "query": "private thought",
-        "limit": 10
-    })
-    claude_memories = claude_response.json()["memories"]
-    
-    # Claude should only see their own memory
-    assert len(claude_memories) == 1
-    assert "Python" in claude_memories[0]
-    assert "JavaScript" not in claude_memories[0]
-    
-    # Search Alpha's memories
-    alpha_response = await test_client.post("/api/v1/alpha/search", json={
-        "query": "private thought",
-        "limit": 10
-    })
-    alpha_memories = alpha_response.json()["memories"]
-    
-    # Alpha should only see their own memory
-    assert len(alpha_memories) == 1
-    assert "JavaScript" in alpha_memories[0]
-    assert "Python" not in alpha_memories[0]
+    try:
+        # Set up Claude's schema
+        await conn.execute('CREATE SCHEMA IF NOT EXISTS "claude"')
+        await conn.execute('SET search_path TO "claude"')
+        await conn.execute('CREATE EXTENSION IF NOT EXISTS vector SCHEMA "claude"')
+        await conn.execute("""
+            CREATE TABLE IF NOT EXISTS memories (
+                id SERIAL PRIMARY KEY,
+                content TEXT NOT NULL,
+                summary TEXT,
+                tags JSONB DEFAULT '[]',
+                entities JSONB DEFAULT '[]',
+                actions JSONB DEFAULT '[]',
+                embedding vector(768),
+                created_at TIMESTAMPTZ DEFAULT NOW(),
+                active BOOLEAN DEFAULT true
+            )
+        """)
+        
+        # Set up Alpha's schema
+        await conn.execute('CREATE SCHEMA IF NOT EXISTS "alpha"')
+        await conn.execute('SET search_path TO "alpha"')
+        await conn.execute('CREATE EXTENSION IF NOT EXISTS vector SCHEMA "alpha"')
+        await conn.execute("""
+            CREATE TABLE IF NOT EXISTS memories (
+                id SERIAL PRIMARY KEY,
+                content TEXT NOT NULL,
+                summary TEXT,
+                tags JSONB DEFAULT '[]',
+                entities JSONB DEFAULT '[]',
+                actions JSONB DEFAULT '[]',
+                embedding vector(768),
+                created_at TIMESTAMPTZ DEFAULT NOW(),
+                active BOOLEAN DEFAULT true
+            )
+        """)
+        
+        # Now test with the API
+        async with AsyncClient(app=app, base_url="http://test") as client:
+            # Store memory for Claude
+            await client.post("/api/v1/claude/store", json={
+                "content": "Claude's private thought about Python",
+                "tags": ["python", "private"]
+            })
+            
+            # Store memory for Alpha
+            await client.post("/api/v1/alpha/store", json={
+                "content": "Alpha's private thought about JavaScript",
+                "tags": ["javascript", "private"]
+            })
+            
+            # Search Claude's memories
+            claude_response = await client.post("/api/v1/claude/search", json={
+                "query": "private thought",
+                "limit": 10
+            })
+            claude_memories = claude_response.json()["memories"]
+            
+            # Claude should only see their own memory
+            assert len(claude_memories) == 1
+            assert "Python" in claude_memories[0]
+            assert "JavaScript" not in claude_memories[0]
+            
+            # Search Alpha's memories
+            alpha_response = await client.post("/api/v1/alpha/search", json={
+                "query": "private thought",
+                "limit": 10
+            })
+            alpha_memories = alpha_response.json()["memories"]
+            
+            # Alpha should only see their own memory
+            assert len(alpha_memories) == 1
+            assert "JavaScript" in alpha_memories[0]
+            assert "Python" not in alpha_memories[0]
+            
+    finally:
+        # Clean up
+        await conn.execute('DROP SCHEMA IF EXISTS "claude" CASCADE')
+        await conn.execute('DROP SCHEMA IF EXISTS "alpha" CASCADE')
+        await conn.close()
 
 
 @pytest.mark.asyncio
@@ -81,12 +143,12 @@ async def test_memory_init_returns_recent_and_context(test_client, mock_ollama_r
     ]
     
     for memory in memories:
-        await test_client.post("/api/v1/test_tenant/store", json={
+        await test_client.post(f"/api/v1/{test_client.test_tenant}/store", json={
             "content": memory
         })
     
     # Call init
-    response = await test_client.post("/api/v1/test_tenant/init")
+    response = await test_client.post(f"/api/v1/{test_client.test_tenant}/init")
     assert response.status_code == 200
     
     data = response.json()
@@ -104,18 +166,18 @@ async def test_memory_init_returns_recent_and_context(test_client, mock_ollama_r
 async def test_search_by_semantic_similarity(test_client, mock_ollama_response):
     """Test semantic search finds related memories."""
     # Store memories about different topics
-    await test_client.post("/api/v1/test_tenant/store", json={
+    await test_client.post(f"/api/v1/{test_client.test_tenant}/store", json={
         "content": "Sparkle the cat stole pizza again"
     })
-    await test_client.post("/api/v1/test_tenant/store", json={
+    await test_client.post(f"/api/v1/{test_client.test_tenant}/store", json={
         "content": "Python debugging is frustrating"
     })
-    await test_client.post("/api/v1/test_tenant/store", json={
+    await test_client.post(f"/api/v1/{test_client.test_tenant}/store", json={
         "content": "My cat Sparkle's criminal activities continue"
     })
     
     # Search for cat-related memories
-    response = await test_client.post("/api/v1/test_tenant/search", json={
+    response = await test_client.post(f"/api/v1/{test_client.test_tenant}/search", json={
         "query": "feline mischief",
         "limit": 10
     })
@@ -133,12 +195,12 @@ async def test_search_by_semantic_similarity(test_client, mock_ollama_response):
 async def test_get_recent_memories(test_client, mock_ollama_response):
     """Test retrieving recent memories within time window."""
     # Store a memory
-    await test_client.post("/api/v1/test_tenant/store", json={
+    await test_client.post(f"/api/v1/{test_client.test_tenant}/store", json={
         "content": "Just stored this memory"
     })
     
     # Get recent memories
-    response = await test_client.post("/api/v1/test_tenant/recent", json={
+    response = await test_client.post(f"/api/v1/{test_client.test_tenant}/recent", json={
         "hours": 1,
         "limit": 10
     })
@@ -157,12 +219,12 @@ async def test_splashback_similarity_threshold(test_client, mock_ollama_response
     
     # Store multiple memories
     for i in range(5):
-        await test_client.post("/api/v1/test_tenant/store", json={
+        await test_client.post(f"/api/v1/{test_client.test_tenant}/store", json={
             "content": f"Memory number {i}"
         })
     
     # Store one more and check splashback
-    response = await test_client.post("/api/v1/test_tenant/store", json={
+    response = await test_client.post(f"/api/v1/{test_client.test_tenant}/store", json={
         "content": "Final memory"
     })
     

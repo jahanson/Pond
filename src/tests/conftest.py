@@ -24,11 +24,12 @@ def event_loop():
 
 @pytest_asyncio.fixture
 async def test_db() -> AsyncGenerator[str, None]:
-    """Create an isolated test database for each test."""
-    # Generate unique test database name
-    test_db_name = f"pond_test_{uuid.uuid4().hex[:8]}"
+    """Create an isolated test database with tenant schemas."""
+    # Use a fixed test database name (from DATABASE_URL)
+    # Each test will create/drop schemas, not databases
+    test_db_name = "pond_test"
     
-    # Connect to postgres to create test database
+    # Connect to postgres to ensure test database exists
     admin_conn = await asyncpg.connect(
         host=settings.db_host,
         port=settings.db_port,
@@ -38,58 +39,81 @@ async def test_db() -> AsyncGenerator[str, None]:
     )
     
     try:
-        # Create test database
-        await admin_conn.execute(f'CREATE DATABASE "{test_db_name}"')
-        
-        # Connect to test database and set up schema
-        test_conn = await asyncpg.connect(
-            host=settings.db_host,
-            port=settings.db_port,
-            user=settings.db_user,
-            password=settings.db_password,
-            database=test_db_name,
+        # Create test database if it doesn't exist
+        exists = await admin_conn.fetchval(
+            "SELECT 1 FROM pg_database WHERE datname = $1", test_db_name
         )
+        if not exists:
+            await admin_conn.execute(f'CREATE DATABASE "{test_db_name}"')
         
-        try:
-            # Create pgvector extension
-            await test_conn.execute("CREATE EXTENSION IF NOT EXISTS vector")
-            
-            # Create memories table
-            await test_conn.execute("""
-                CREATE TABLE memories (
-                    id SERIAL PRIMARY KEY,
-                    content TEXT NOT NULL,
-                    summary TEXT,
-                    tags JSONB DEFAULT '[]',
-                    embedding vector(768),
-                    created_at TIMESTAMPTZ DEFAULT NOW(),
-                    active BOOLEAN DEFAULT true
-                );
-                
-                CREATE INDEX idx_embedding ON memories 
-                USING ivfflat (embedding vector_cosine_ops);
-                CREATE INDEX idx_active_created ON memories(active, created_at DESC);
-                CREATE INDEX idx_tags ON memories USING GIN (tags);
-            """)
-            
-            yield test_db_name
-            
-        finally:
-            await test_conn.close()
-            
+        yield test_db_name
+        
     finally:
-        # Clean up test database
-        await admin_conn.execute(f'DROP DATABASE IF EXISTS "{test_db_name}"')
+        # Note: We don't drop the database, just clean up schemas
         await admin_conn.close()
 
 
 @pytest_asyncio.fixture
-async def test_client(test_db: str) -> AsyncGenerator[AsyncClient, None]:
-    """Create a test client with an isolated database."""
+async def test_tenant(test_db: str) -> AsyncGenerator[str, None]:
+    """Create a test tenant schema."""
+    tenant_name = f"test_{uuid.uuid4().hex[:8]}"
+    
+    conn = await asyncpg.connect(
+        host=settings.db_host,
+        port=settings.db_port,
+        user=settings.db_user,
+        password=settings.db_password,
+        database=test_db,
+    )
+    
+    try:
+        # Create schema for tenant
+        await conn.execute(f'CREATE SCHEMA IF NOT EXISTS "{tenant_name}"')
+        
+        # Set search path to tenant schema
+        await conn.execute(f'SET search_path TO "{tenant_name}"')
+        
+        # Enable pgvector in this schema
+        await conn.execute(f'CREATE EXTENSION IF NOT EXISTS vector SCHEMA "{tenant_name}"')
+        
+        # Create memories table in tenant schema
+        await conn.execute("""
+            CREATE TABLE memories (
+                id SERIAL PRIMARY KEY,
+                content TEXT NOT NULL,
+                summary TEXT,
+                tags JSONB DEFAULT '[]',
+                entities JSONB DEFAULT '[]',
+                actions JSONB DEFAULT '[]',
+                embedding vector(768),
+                created_at TIMESTAMPTZ DEFAULT NOW(),
+                active BOOLEAN DEFAULT true
+            );
+            
+            CREATE INDEX idx_memories_created_at ON memories(created_at);
+            CREATE INDEX idx_memories_embedding ON memories 
+            USING ivfflat (embedding vector_cosine_ops);
+            CREATE INDEX idx_memories_entities ON memories USING gin(entities);
+        """)
+        
+        yield tenant_name
+        
+    finally:
+        # Clean up test schema
+        await conn.execute(f'DROP SCHEMA IF EXISTS "{tenant_name}" CASCADE')
+        await conn.close()
+
+
+@pytest_asyncio.fixture
+async def test_client(test_db: str, test_tenant: str) -> AsyncGenerator[AsyncClient, None]:
+    """Create a test client with an isolated tenant schema."""
     # Override the database name for this test
     settings.db_name = test_db
     
+    # The test client will use test_tenant in URLs
     async with AsyncClient(app=app, base_url="http://test") as client:
+        # Store tenant name for tests to use
+        client.test_tenant = test_tenant
         yield client
 
 

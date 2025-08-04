@@ -7,7 +7,7 @@ import pytest
 @pytest.mark.asyncio
 async def test_entity_extraction_basic(test_client, mock_ollama_response):
     """Test that entities are extracted from memories."""
-    response = await test_client.post("/api/v1/test_tenant/store", json={
+    response = await test_client.post(f"/api/v1/{test_client.test_tenant}/store", json={
         "content": "Sparkle stole pizza from Jeffery in the kitchen"
     })
     
@@ -15,7 +15,7 @@ async def test_entity_extraction_basic(test_client, mock_ollama_response):
     assert response.status_code == 200
     
     # Check stored memory has entities
-    search_response = await test_client.post("/api/v1/test_tenant/recent", json={
+    search_response = await test_client.post(f"/api/v1/{test_client.test_tenant}/recent", json={
         "hours": 1,
         "limit": 1
     })
@@ -37,7 +37,7 @@ async def test_entity_type_detection(test_client, mock_ollama_response):
     ]
     
     for content, expected_entities, expected_types in memories:
-        response = await test_client.post("/api/v1/test_tenant/store", json={
+        response = await test_client.post(f"/api/v1/{test_client.test_tenant}/store", json={
             "content": content
         })
         assert response.status_code == 200
@@ -56,7 +56,7 @@ async def test_action_extraction(test_client, mock_ollama_response):
     ]
     
     for content, expected_actions in test_cases:
-        response = await test_client.post("/api/v1/test_tenant/store", json={
+        response = await test_client.post(f"/api/v1/{test_client.test_tenant}/store", json={
             "content": content
         })
         assert response.status_code == 200
@@ -67,7 +67,7 @@ async def test_action_extraction(test_client, mock_ollama_response):
 @pytest.mark.asyncio
 async def test_auto_tag_generation(test_client, mock_ollama_response):
     """Test that tags are automatically generated from content."""
-    response = await test_client.post("/api/v1/test_tenant/store", json={
+    response = await test_client.post(f"/api/v1/{test_client.test_tenant}/store", json={
         "content": "Spent 3 hours debugging Python async code with pytest"
     })
     
@@ -81,18 +81,18 @@ async def test_auto_tag_generation(test_client, mock_ollama_response):
 async def test_entity_based_search(test_client, mock_ollama_response):
     """Test searching by specific entities."""
     # Store memories with different entities
-    await test_client.post("/api/v1/test_tenant/store", json={
+    await test_client.post(f"/api/v1/{test_client.test_tenant}/store", json={
         "content": "Sparkle knocked over the water bowl"
     })
-    await test_client.post("/api/v1/test_tenant/store", json={
+    await test_client.post(f"/api/v1/{test_client.test_tenant}/store", json={
         "content": "Jeffery fixed the Python bug"  
     })
-    await test_client.post("/api/v1/test_tenant/store", json={
+    await test_client.post(f"/api/v1/{test_client.test_tenant}/store", json={
         "content": "Sparkle slept in the sun"
     })
     
     # Search for all Sparkle memories
-    response = await test_client.post("/api/v1/test_tenant/search", json={
+    response = await test_client.post(f"/api/v1/{test_client.test_tenant}/search", json={
         "entity": "Sparkle",
         "limit": 10
     })

@@ -10,10 +10,10 @@ async def test_request_id_header_present(test_client, mock_ollama_response):
     """Test that all responses include request ID header."""
     # Test various endpoints
     endpoints = [
-        ("POST", "/api/v1/test_tenant/init", {}),
-        ("POST", "/api/v1/test_tenant/store", {"content": "Test memory"}),
-        ("POST", "/api/v1/test_tenant/search", {"query": "test"}),
-        ("POST", "/api/v1/test_tenant/recent", {"hours": 1}),
+        ("POST", f"/api/v1/{test_client.test_tenant}/init", {}),
+        ("POST", f"/api/v1/{test_client.test_tenant}/store", {"content": "Test memory"}),
+        ("POST", f"/api/v1/{test_client.test_tenant}/search", {"query": "test"}),
+        ("POST", f"/api/v1/{test_client.test_tenant}/recent", {"hours": 1}),
         ("GET", "/api/v1/health", None),
     ]
     
@@ -39,7 +39,7 @@ async def test_request_id_unique(test_client, mock_ollama_response):
     # Make multiple requests
     request_ids = []
     for _ in range(5):
-        response = await test_client.post("/api/v1/test_tenant/store", json={
+        response = await test_client.post(f"/api/v1/{test_client.test_tenant}/store", json={
             "content": "Test memory"
         })
         request_ids.append(response.headers["X-Request-ID"])
@@ -61,32 +61,25 @@ async def test_health_check_comprehensive(test_client):
     assert data["status"] in ["healthy", "degraded", "unhealthy"]
     assert "timestamp" in data
     
-    # Component details
+    # Component details (per SPEC)
     assert "components" in data
     components = data["components"]
-    
-    # API component
-    assert "api" in components
-    assert "status" in components["api"]
-    assert "version" in components["api"]
-    assert "uptime_seconds" in components["api"]
     
     # Database component
     assert "database" in components
     assert "status" in components["database"]
-    # These might not be available in test environment
-    # but should be present in real deployment
+    assert "pool_size" in components["database"]
+    assert "pool_available" in components["database"]
+    assert "response_time_ms" in components["database"]
     
     # Ollama component
     assert "ollama" in components
     assert "status" in components["ollama"]
-    assert "endpoint" in components["ollama"]
-    assert "model" in components["ollama"]
+    assert "response_time_ms" in components["ollama"]
     
-    # Timezone info
-    assert "timezone" in components
-    assert "configured" in components["timezone"]
-    assert "source" in components["timezone"]
+    # Version and uptime at top level (per SPEC)
+    assert "version" in data
+    assert "uptime_seconds" in data
 
 
 @pytest.mark.asyncio
