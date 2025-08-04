@@ -332,6 +332,141 @@ async def get_splashback(tenant: str, embedding: List[float]) -> List[Memory]:
 5. **Versioning**: No memory versions or edit history
 6. **Caching**: No Redis or response caching yet
 
+## Logging and Observability
+
+### Structured Logging
+
+#### Library: structlog
+```python
+import structlog
+
+logger = structlog.get_logger()
+
+# Development: Pretty, colored output
+# Production: JSON lines for parsing
+```
+
+#### What to Log
+
+**API Layer**
+- Every request: method, path, tenant, request_id, response_time
+- Authentication/authorization decisions
+- Validation failures with details
+- Error responses with stack traces
+
+**Memory Operations**
+```python
+# Good - logs metadata only
+logger.info("memory.stored", 
+    tenant="claude",
+    request_id=request_id,
+    length=len(content),
+    tag_count=len(tags),
+    entity_count=len(entities),
+    splashback_count=len(splashback),
+    splashback_similarities=[m.similarity for m in splashback]
+)
+
+# BAD - never log actual memory content!
+# logger.info("stored memory", content=memory_content)  # NO!
+```
+
+**Embedding Service**
+- Ollama requests: start, duration, success/failure
+- Token count (if available)
+- Cache hits/misses (when we add caching)
+- Connection failures and retries
+
+**Database Operations**
+- Slow queries (>100ms)
+- Connection pool exhaustion
+- Transaction rollbacks
+
+**Entity Extraction**
+- Processing time
+- Entities found by type
+- Auto-tags generated count
+
+#### Log Levels
+- **DEBUG**: Detailed flow, not for production
+- **INFO**: Normal operations, key business events
+- **WARNING**: Degraded but functioning (Ollama slow, etc.)
+- **ERROR**: Failures that need attention
+
+### Metrics
+
+#### Key Metrics to Track
+```python
+# Using prometheus_client or similar
+request_duration = Histogram('pond_request_duration_seconds', 
+                           'Request duration',
+                           ['method', 'endpoint', 'status'])
+
+memory_store_duration = Histogram('pond_memory_store_seconds',
+                                'Time to store memory',
+                                ['tenant'])
+
+splashback_memories = Histogram('pond_splashback_count',
+                              'Number of memories in splashback',
+                              ['tenant'])
+
+embedding_cache_hit_rate = Counter('pond_embedding_cache_hits',
+                                 'Embedding cache hit rate',
+                                 ['hit'])
+```
+
+### Health Checks
+
+Enhanced health endpoint should return:
+```json
+{
+  "status": "healthy",
+  "timestamp": "2025-08-04T14:03:00Z",
+  "components": {
+    "database": {
+      "status": "healthy",
+      "pool_size": 10,
+      "pool_available": 8,
+      "response_time_ms": 2
+    },
+    "ollama": {
+      "status": "healthy", 
+      "model_loaded": true,
+      "response_time_ms": 45
+    },
+    "disk_space": {
+      "status": "healthy",
+      "free_gb": 123,
+      "used_percent": 45
+    }
+  },
+  "version": "1.0.0",
+  "uptime_seconds": 3600
+}
+```
+
+### Privacy and Security
+
+**Never Log**:
+- Memory content
+- Full request/response bodies
+- Database queries with actual data
+- API keys or secrets
+
+**Always Log**:
+- Who did what when (audit trail)
+- Performance characteristics
+- Error conditions
+- Resource usage
+
+### Observability Stack (Future)
+
+For production deployment:
+1. **Logs**: structlog → stdout → log aggregator
+2. **Metrics**: Prometheus + Grafana
+3. **Traces**: OpenTelemetry (when we go distributed)
+4. **Alerts**: Based on error rates, response times, resource usage
+
 ## Success Criteria
 
 All tests pass when:
