@@ -5,13 +5,12 @@ import asyncpg
 import pytest
 from httpx import AsyncClient
 
-from pond.api.main import app
 from pond.config import settings
 
 
 @pytest.mark.asyncio
-async def test_store_memory_with_splashback(test_client, mock_ollama_response):
-    """Test that storing a memory returns relevant splashback memories."""
+async def test_store_memory_with_splash(test_client, mock_ollama_response):
+    """Test that storing a memory returns relevant splash memories."""
     # Store first memory about Sparkle
     response1 = await test_client.post(f"/api/v1/{test_client.test_tenant}/store", json={
         "content": "Sparkle stole pizza from the counter",
@@ -19,7 +18,17 @@ async def test_store_memory_with_splashback(test_client, mock_ollama_response):
     })
     assert response1.status_code == 200
     data1 = response1.json()
-    assert data1["splashback"] == []  # First memory has no splashback
+    
+    # Verify response structure matches spec
+    assert "id" in data1
+    assert "content" in data1
+    assert "tags" in data1
+    assert "entities" in data1
+    assert "actions" in data1
+    assert "created_at" in data1
+    assert "splash" in data1
+    
+    assert data1["splash"] == []  # First memory has no splash
     
     # Store second memory about Sparkle
     response2 = await test_client.post(f"/api/v1/{test_client.test_tenant}/store", json={
@@ -29,10 +38,10 @@ async def test_store_memory_with_splashback(test_client, mock_ollama_response):
     assert response2.status_code == 200
     data2 = response2.json()
     
-    # Should get splashback with the pizza memory
-    assert len(data2["splashback"]) > 0
-    assert "pizza" in data2["splashback"][0]["content"]
-    assert data2["splashback"][0]["similarity"] > 0.7
+    # Should get splash with the pizza memory
+    assert len(data2["splash"]) > 0
+    assert "pizza" in data2["splash"][0]["content"]
+    assert data2["splash"][0]["similarity"] > 0.7
 
 
 @pytest.mark.asyncio
@@ -54,16 +63,14 @@ async def test_tenant_isolation(test_db, mock_ollama_response):
         # Set up Claude's schema
         await conn.execute('CREATE SCHEMA IF NOT EXISTS "claude"')
         await conn.execute('SET search_path TO "claude"')
-        await conn.execute('CREATE EXTENSION IF NOT EXISTS vector SCHEMA "claude"')
         await conn.execute("""
             CREATE TABLE IF NOT EXISTS memories (
                 id SERIAL PRIMARY KEY,
                 content TEXT NOT NULL,
-                summary TEXT,
                 tags JSONB DEFAULT '[]',
                 entities JSONB DEFAULT '[]',
                 actions JSONB DEFAULT '[]',
-                embedding vector(768),
+                embedding public.vector(768),
                 created_at TIMESTAMPTZ DEFAULT NOW(),
                 active BOOLEAN DEFAULT true
             )
@@ -72,16 +79,14 @@ async def test_tenant_isolation(test_db, mock_ollama_response):
         # Set up Alpha's schema
         await conn.execute('CREATE SCHEMA IF NOT EXISTS "alpha"')
         await conn.execute('SET search_path TO "alpha"')
-        await conn.execute('CREATE EXTENSION IF NOT EXISTS vector SCHEMA "alpha"')
         await conn.execute("""
             CREATE TABLE IF NOT EXISTS memories (
                 id SERIAL PRIMARY KEY,
                 content TEXT NOT NULL,
-                summary TEXT,
                 tags JSONB DEFAULT '[]',
                 entities JSONB DEFAULT '[]',
                 actions JSONB DEFAULT '[]',
-                embedding vector(768),
+                embedding public.vector(768),
                 created_at TIMESTAMPTZ DEFAULT NOW(),
                 active BOOLEAN DEFAULT true
             )
@@ -89,8 +94,7 @@ async def test_tenant_isolation(test_db, mock_ollama_response):
         
         # Now test with the API
         async with AsyncClient(
-            app=app, 
-            base_url="http://test",
+            base_url=f"http://test:{settings.port}",
             headers={"X-API-Key": settings.api_key or "test-key"}
         ) as client:
             # Store memory for Claude
@@ -110,24 +114,28 @@ async def test_tenant_isolation(test_db, mock_ollama_response):
                 "query": "private thought",
                 "limit": 10
             })
-            claude_memories = claude_response.json()["memories"]
+            claude_data = claude_response.json()
+            assert "memories" in claude_data
+            claude_memories = claude_data["memories"]
             
             # Claude should only see their own memory
             assert len(claude_memories) == 1
-            assert "Python" in claude_memories[0]
-            assert "JavaScript" not in claude_memories[0]
+            assert "Python" in claude_memories[0]["content"]
+            assert "JavaScript" not in claude_memories[0]["content"]
             
             # Search Alpha's memories
             alpha_response = await client.post("/api/v1/alpha/search", json={
                 "query": "private thought",
                 "limit": 10
             })
-            alpha_memories = alpha_response.json()["memories"]
+            alpha_data = alpha_response.json()
+            assert "memories" in alpha_data
+            alpha_memories = alpha_data["memories"]
             
             # Alpha should only see their own memory
             assert len(alpha_memories) == 1
-            assert "JavaScript" in alpha_memories[0]
-            assert "Python" not in alpha_memories[0]
+            assert "JavaScript" in alpha_memories[0]["content"]
+            assert "Python" not in alpha_memories[0]["content"]
             
     finally:
         # Clean up
@@ -156,13 +164,26 @@ async def test_memory_init_returns_recent_and_context(test_client, mock_ollama_r
     assert response.status_code == 200
     
     data = response.json()
-    assert "context" in data
+    assert "current_time" in data
     assert "recent_memories" in data
+    
+    # Check timestamp format
+    from datetime import datetime
+    datetime.fromisoformat(data["current_time"].replace('Z', '+00:00'))
     
     # Should have our recent memories
     assert len(data["recent_memories"]) > 0
+    # Recent memories should be full memory objects
+    for memory in data["recent_memories"]:
+        assert "id" in memory
+        assert "content" in memory
+        assert "created_at" in memory
+        assert "tags" in memory
+        assert "entities" in memory
+        assert "actions" in memory
+    
     # Most recent memories should include what we just stored
-    recent_contents = " ".join(data["recent_memories"])
+    recent_contents = " ".join(m["content"] for m in data["recent_memories"])
     assert "Sparkle" in recent_contents or "semicolon" in recent_contents
 
 
@@ -186,10 +207,23 @@ async def test_search_by_semantic_similarity(test_client, mock_ollama_response):
         "limit": 10
     })
     
-    memories = response.json()["memories"]
+    data = response.json()
+    assert "memories" in data
+    memories = data["memories"]
+    
+    # Check memory structure
+    for memory in memories:
+        assert "id" in memory
+        assert "content" in memory
+        assert "created_at" in memory
+        assert "tags" in memory
+        assert "entities" in memory
+        assert "actions" in memory
+        assert "similarity" in memory
+    
     # Should find Sparkle memories but not Python
-    sparkle_count = sum(1 for m in memories if "Sparkle" in m)
-    python_count = sum(1 for m in memories if "Python" in m)
+    sparkle_count = sum(1 for m in memories if "Sparkle" in m["content"])
+    python_count = sum(1 for m in memories if "Python" in m["content"])
     
     assert sparkle_count >= 2
     assert python_count == 0
@@ -210,14 +244,26 @@ async def test_get_recent_memories(test_client, mock_ollama_response):
     })
     
     assert response.status_code == 200
-    memories = response.json()["memories"]
+    data = response.json()
+    assert "memories" in data
+    memories = data["memories"]
     assert len(memories) > 0
-    assert "Just stored this memory" in memories[0]
+    
+    # Check memory structure
+    for memory in memories:
+        assert "id" in memory
+        assert "content" in memory
+        assert "created_at" in memory
+        assert "tags" in memory
+        assert "entities" in memory
+        assert "actions" in memory
+    
+    assert "Just stored this memory" in memories[0]["content"]
 
 
 @pytest.mark.asyncio
-async def test_splashback_similarity_threshold(test_client, mock_ollama_response):
-    """Test that splashback only returns memories within similarity range."""
+async def test_splash_similarity_threshold(test_client, mock_ollama_response):
+    """Test that splash only returns memories within similarity range."""
     # This test would need different embeddings to test properly
     # For now, we'll test the structure
     
@@ -227,17 +273,70 @@ async def test_splashback_similarity_threshold(test_client, mock_ollama_response
             "content": f"Memory number {i}"
         })
     
-    # Store one more and check splashback
+    # Store one more and check splash
     response = await test_client.post(f"/api/v1/{test_client.test_tenant}/store", json={
         "content": "Final memory"
     })
     
-    splashback = response.json()["splashback"]
+    splash = response.json()["splash"]
     # Should have at most 3 memories (as defined in our design)
-    assert len(splashback) <= 3
+    assert len(splash) <= 3
     
     # Each should have similarity score
-    for memory in splashback:
+    for memory in splash:
         assert "content" in memory
         assert "similarity" in memory
         assert 0 <= memory["similarity"] <= 1
+
+
+@pytest.mark.asyncio
+async def test_auto_tagging_and_entity_extraction(test_client, mock_ollama_response):
+    """Test that memories are auto-tagged and entities are extracted."""
+    response = await test_client.post(f"/api/v1/{test_client.test_tenant}/store", json={
+        "content": "Sparkle the cat loves stealing pizza from the counter",
+        "tags": ["manual-tag"]
+    })
+    
+    assert response.status_code == 200
+    data = response.json()
+    
+    # Check auto-generated tags (should include entity names, nouns)
+    assert "tags" in data
+    assert "manual-tag" in data["tags"]  # User tag preserved
+    # Should have auto-tags from entities and noun chunks
+    assert any(tag in ["sparkle", "cat", "pizza", "counter"] for tag in data["tags"])
+    
+    # Check entity extraction
+    assert "entities" in data
+    entities = data["entities"]
+    assert len(entities) > 0
+    # Should find "Sparkle" as an entity
+    assert any(e["text"].lower() == "sparkle" for e in entities)
+    
+    # Check action extraction
+    assert "actions" in data
+    assert "steal" in data["actions"]  # Lemmatized from "stealing"
+
+
+@pytest.mark.asyncio
+async def test_memory_validation(test_client, mock_ollama_response):
+    """Test content validation rules."""
+    # Test empty content
+    response = await test_client.post(f"/api/v1/{test_client.test_tenant}/store", json={
+        "content": ""
+    })
+    assert response.status_code == 400
+    assert "error" in response.json()
+    
+    # Test whitespace-only content
+    response = await test_client.post(f"/api/v1/{test_client.test_tenant}/store", json={
+        "content": "   \n\t   "
+    })
+    assert response.status_code == 400
+    
+    # Test content too long (over 7500 chars)
+    long_content = "x" * 7501
+    response = await test_client.post(f"/api/v1/{test_client.test_tenant}/store", json={
+        "content": long_content
+    })
+    assert response.status_code == 400

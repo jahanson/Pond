@@ -46,11 +46,28 @@ async def test_db() -> AsyncGenerator[str, None]:
         if not exists:
             await admin_conn.execute(f'CREATE DATABASE "{test_db_name}"')
         
+        await admin_conn.close()
+        
+        # Connect to the test database to enable pgvector
+        test_conn = await asyncpg.connect(
+            host=settings.db_host,
+            port=settings.db_port,
+            user=settings.db_user,
+            password=settings.db_password,
+            database=test_db_name,
+        )
+        
+        try:
+            # Enable pgvector extension at database level
+            await test_conn.execute('CREATE EXTENSION IF NOT EXISTS vector')
+        finally:
+            await test_conn.close()
+        
         yield test_db_name
         
     finally:
         # Note: We don't drop the database, just clean up schemas
-        await admin_conn.close()
+        pass
 
 
 @pytest_asyncio.fixture
@@ -73,19 +90,17 @@ async def test_tenant(test_db: str) -> AsyncGenerator[str, None]:
         # Set search path to tenant schema
         await conn.execute(f'SET search_path TO "{tenant_name}"')
         
-        # Enable pgvector in this schema
-        await conn.execute(f'CREATE EXTENSION IF NOT EXISTS vector SCHEMA "{tenant_name}"')
+        # pgvector is already enabled at database level
         
         # Create memories table in tenant schema
         await conn.execute("""
             CREATE TABLE memories (
                 id SERIAL PRIMARY KEY,
                 content TEXT NOT NULL,
-                summary TEXT,
                 tags JSONB DEFAULT '[]',
                 entities JSONB DEFAULT '[]',
                 actions JSONB DEFAULT '[]',
-                embedding vector(768),
+                embedding public.vector(768),
                 created_at TIMESTAMPTZ DEFAULT NOW(),
                 active BOOLEAN DEFAULT true
             );
@@ -111,14 +126,17 @@ async def test_client(test_db: str, test_tenant: str) -> AsyncGenerator[AsyncCli
     settings.db_name = test_db
     
     # The test client will use test_tenant in URLs
-    async with AsyncClient(
-        app=app, 
-        base_url="http://test",
-        headers={"X-API-Key": settings.api_key or "test-key"}
-    ) as client:
-        # Store tenant name for tests to use
-        client.test_tenant = test_tenant
-        yield client
+    from fastapi.testclient import TestClient
+    
+    with TestClient(app) as test_client:
+        async with AsyncClient(
+            transport=test_client.transport,
+            base_url="http://test",
+            headers={"X-API-Key": settings.api_key or "test-key"}
+        ) as client:
+            # Store tenant name for tests to use
+            client.test_tenant = test_tenant
+            yield client
 
 
 @pytest.fixture
