@@ -398,7 +398,44 @@ async def api_key_middleware(request: Request, call_next):
 - Request ID generation (UUID) for every request
 - Add X-Request-ID header to all responses
 - Request logging with IDs
-- Error handling with proper status codes
+
+**Error Handling Middleware**
+```python
+async def error_handler(request: Request, exc: Exception):
+    request_id = getattr(request.state, "request_id", "unknown")
+    
+    if isinstance(exc, ValidationError):
+        return JSONResponse(
+            status_code=400,
+            content={
+                "error": str(exc),
+                "request_id": request_id
+            }
+        )
+    elif isinstance(exc, OllamaConnectionError):
+        return JSONResponse(
+            status_code=503,
+            content={
+                "error": f"Embedding service unavailable: {exc}",
+                "request_id": request_id
+            }
+        )
+    else:
+        # Log full error internally
+        logger.error("unhandled_error", 
+                    request_id=request_id,
+                    error=str(exc),
+                    traceback=traceback.format_exc())
+        
+        # Return sanitized error to client
+        return JSONResponse(
+            status_code=500,
+            content={
+                "error": "Internal error processing request",
+                "request_id": request_id
+            }
+        )
+```
 
 #### Routes
 All routes under `/api/v1/{tenant}/`:
@@ -436,16 +473,39 @@ async def get_splashback(tenant: str, embedding: List[float]) -> List[Memory]:
   - Established AI: Unrelated memories are wasteful noise when exploring new topics
   - Empty splashback signals "this is new territory" which is valuable information
 
-#### Memory Storage Flow
+#### Memory Storage Flow (All-or-Nothing)
 1. Validate memory length
-2. Extract entities and actions
+2. Extract entities and actions  
 3. Generate auto-tags from content
 4. Merge with user-provided tags
 5. Normalize all tags
 6. Get embedding from Ollama
-7. Store in database
+7. Store in database (transaction)
 8. Get splashback memories
 9. Return splashback
+
+**Failure Handling**: ANY step failure = complete rejection
+- Database transaction ensures atomicity
+- Clear error messages for AI consumption
+- No partial states allowed
+
+Example error responses:
+```json
+{
+  "error": "Failed to generate embedding: Ollama service unavailable at http://localhost:11434",
+  "request_id": "abc-123"
+}
+
+{
+  "error": "Memory too long: 8234 characters exceeds maximum of 7500",
+  "request_id": "def-456"  
+}
+
+{
+  "error": "Entity extraction failed: spaCy model 'en_core_web_sm' not found",
+  "request_id": "ghi-789"
+}
+```
 
 #### New Tenant Creation Flow
 ```python
@@ -546,6 +606,12 @@ This happens automatically on first request to a new tenant.
    - Required header: `X-API-Key: <key>`
    - Health check endpoint is public
    - No complex auth flows for local-only service
+
+8. **Error Philosophy**: Fail completely rather than store incomplete memories
+   - All-or-nothing transaction approach
+   - Clear, AI-readable error messages
+   - No partial states in database
+   - Integrity over availability
 
 ## What We're NOT Building (Yet)
 
