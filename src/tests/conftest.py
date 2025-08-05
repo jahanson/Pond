@@ -3,7 +3,7 @@ Shared test fixtures for Pond.
 """
 import asyncio
 import uuid
-from typing import AsyncGenerator
+from collections.abc import AsyncGenerator
 
 import asyncpg
 import pytest
@@ -28,7 +28,7 @@ async def test_db() -> AsyncGenerator[str, None]:
     # Use a fixed test database name (from DATABASE_URL)
     # Each test will create/drop schemas, not databases
     test_db_name = "pond_test"
-    
+
     # Connect to postgres to ensure test database exists
     admin_conn = await asyncpg.connect(
         host=settings.db_host,
@@ -37,7 +37,7 @@ async def test_db() -> AsyncGenerator[str, None]:
         password=settings.db_password,
         database="postgres",
     )
-    
+
     try:
         # Create test database if it doesn't exist
         exists = await admin_conn.fetchval(
@@ -45,9 +45,9 @@ async def test_db() -> AsyncGenerator[str, None]:
         )
         if not exists:
             await admin_conn.execute(f'CREATE DATABASE "{test_db_name}"')
-        
+
         await admin_conn.close()
-        
+
         # Connect to the test database to enable pgvector
         test_conn = await asyncpg.connect(
             host=settings.db_host,
@@ -56,15 +56,15 @@ async def test_db() -> AsyncGenerator[str, None]:
             password=settings.db_password,
             database=test_db_name,
         )
-        
+
         try:
             # Enable pgvector extension at database level
             await test_conn.execute('CREATE EXTENSION IF NOT EXISTS vector')
         finally:
             await test_conn.close()
-        
+
         yield test_db_name
-        
+
     finally:
         # Note: We don't drop the database, just clean up schemas
         pass
@@ -74,7 +74,7 @@ async def test_db() -> AsyncGenerator[str, None]:
 async def test_tenant(test_db: str) -> AsyncGenerator[str, None]:
     """Create a test tenant schema."""
     tenant_name = f"test_{uuid.uuid4().hex[:8]}"
-    
+
     conn = await asyncpg.connect(
         host=settings.db_host,
         port=settings.db_port,
@@ -82,16 +82,16 @@ async def test_tenant(test_db: str) -> AsyncGenerator[str, None]:
         password=settings.db_password,
         database=test_db,
     )
-    
+
     try:
         # Create schema for tenant
         await conn.execute(f'CREATE SCHEMA IF NOT EXISTS "{tenant_name}"')
-        
+
         # Set search path to tenant schema
         await conn.execute(f'SET search_path TO "{tenant_name}"')
-        
+
         # pgvector is already enabled at database level
-        
+
         # Create memories table in tenant schema
         await conn.execute("""
             CREATE TABLE memories (
@@ -110,9 +110,9 @@ async def test_tenant(test_db: str) -> AsyncGenerator[str, None]:
             USING ivfflat (embedding vector_cosine_ops);
             CREATE INDEX idx_memories_entities ON memories USING gin(entities);
         """)
-        
+
         yield tenant_name
-        
+
     finally:
         # Clean up test schema
         await conn.execute(f'DROP SCHEMA IF EXISTS "{tenant_name}" CASCADE')
@@ -124,10 +124,10 @@ async def test_client(test_db: str, test_tenant: str) -> AsyncGenerator[AsyncCli
     """Create a test client with an isolated tenant schema."""
     # Override the database name for this test
     settings.db_name = test_db
-    
+
     # The test client will use test_tenant in URLs
     from fastapi.testclient import TestClient
-    
+
     with TestClient(app) as test_client:
         async with AsyncClient(
             transport=test_client.transport,
@@ -153,12 +153,12 @@ def mock_ollama_response(monkeypatch):
         class MockResponse:
             def json(self):
                 return {"embedding": [0.1] * 768}
-            
+
             @property
             def status_code(self):
                 return 200
-        
+
         return MockResponse()
-    
+
     # This will be used to patch httpx.AsyncClient.post
     monkeypatch.setattr("httpx.AsyncClient.post", mock_post)

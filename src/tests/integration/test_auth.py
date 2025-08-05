@@ -19,7 +19,7 @@ async def test_auth_required_for_api_endpoints(test_db: str):
             ("POST", "/api/v1/claude/recent", {"hours": 1}),
             ("POST", "/api/v1/claude/init", {}),
         ]
-        
+
         for method, path, json_data in endpoints:
             response = await client.post(path, json=json_data)
             assert response.status_code == 401
@@ -48,7 +48,7 @@ async def test_valid_api_key_accepted(test_client, mock_ollama_response):
 async def test_wrong_api_key_rejected(test_db: str):
     """Test that wrong API key is rejected."""
     async with AsyncClient(
-        app=app, 
+        app=app,
         base_url="http://test",
         headers={"X-API-Key": "wrong-key"}
     ) as client:
