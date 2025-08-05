@@ -33,6 +33,7 @@ async def ensure_tenant_schema(conn: Connection, tenant: str) -> None:
         CREATE TABLE IF NOT EXISTS memories (
             id SERIAL PRIMARY KEY,
             content TEXT NOT NULL,
+            content_tsv tsvector GENERATED ALWAYS AS (to_tsvector('english', content)) STORED,
             embedding vector(768),
             forgotten BOOLEAN DEFAULT false,
             metadata JSONB DEFAULT '{}',
@@ -43,8 +44,32 @@ async def ensure_tenant_schema(conn: Connection, tenant: str) -> None:
         )
     """)
 
+    # Add tsvector column if it doesn't exist (for migration)
+    # This handles existing tables that don't have the column yet
+    await conn.execute("""
+        DO $$ 
+        BEGIN
+            IF NOT EXISTS (
+                SELECT 1 FROM information_schema.columns 
+                WHERE table_schema = current_schema()
+                AND table_name = 'memories' 
+                AND column_name = 'content_tsv'
+            ) THEN
+                ALTER TABLE memories 
+                ADD COLUMN content_tsv tsvector 
+                GENERATED ALWAYS AS (to_tsvector('english', content)) STORED;
+            END IF;
+        END $$;
+    """)
+
     # Create indexes for performance
     # Note: CREATE INDEX IF NOT EXISTS requires PostgreSQL 9.5+
+
+    # For full-text search on content
+    await conn.execute("""
+        CREATE INDEX IF NOT EXISTS idx_memories_content_tsv
+        ON memories USING gin (content_tsv)
+    """)
 
     # For vector similarity search (using IVFFlat for better performance at scale)
     await conn.execute("""

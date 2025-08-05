@@ -221,23 +221,96 @@ class MemoryRepository:
             return [self._row_to_memory(row) for row in rows]
 
     async def search(self, query: str, limit: int = 10) -> list[Memory]:
-        """Search for memories by semantic similarity."""
-        # Get embedding for the query
+        """Unified search across text, features, and semantic similarity.
+        
+        Combines three search methods with weighted scoring:
+        - Full-text search on content
+        - Feature matching on tags, entities, actions
+        - Semantic similarity via embeddings
+        """
+        # Handle empty query
+        if not query or not query.strip():
+            return []
+
+        # Scoring weights - tunable in source for easy experimentation
+        TEXT_WEIGHT = 0.4      # Exact/partial text matches  # noqa: N806
+        FEATURE_WEIGHT = 0.2   # Tags/entities/actions  # noqa: N806
+        SEMANTIC_WEIGHT = 0.4  # Semantic similarity  # noqa: N806
+
+        # Get embedding for semantic search
         query_embedding = await self._get_embedding(query)
+
+        # Normalize query for feature matching (lowercase, lemmatized)
+        query_lower = query.lower()
 
         async with self.db_pool.acquire_tenant(self.tenant) as conn:
             rows = await conn.fetch(
                 """
-                SELECT id, content, embedding, metadata,
-                       1 - (embedding <=> $1) as similarity
-                FROM memories
-                WHERE NOT forgotten
-                AND embedding IS NOT NULL
-                ORDER BY embedding <=> $1
-                LIMIT $2
+                WITH text_search AS (
+                    -- Full-text search using tsvector
+                    SELECT id,
+                           ts_rank(content_tsv, plainto_tsquery('english', $1)) as score
+                    FROM memories
+                    WHERE NOT forgotten
+                    AND content_tsv @@ plainto_tsquery('english', $1)
+                ),
+                feature_search AS (
+                    -- Feature matching on tags, entities, actions
+                    SELECT id, 1.0 as score
+                    FROM memories
+                    WHERE NOT forgotten
+                    AND (
+                        -- Check if query matches any tag
+                        EXISTS (
+                            SELECT 1 FROM jsonb_array_elements_text(metadata->'tags') AS tag
+                            WHERE lower(tag) = $2
+                        )
+                        -- Check if query matches any entity text
+                        OR EXISTS (
+                            SELECT 1 FROM jsonb_array_elements(metadata->'entities') AS entity
+                            WHERE lower(entity->>'text') = $2
+                        )
+                        -- Check if query matches any action
+                        OR EXISTS (
+                            SELECT 1 FROM jsonb_array_elements_text(metadata->'actions') AS action
+                            WHERE lower(action) = $2
+                        )
+                    )
+                ),
+                semantic_search AS (
+                    -- Semantic similarity using embeddings
+                    SELECT id,
+                           1 - (embedding <=> $3::vector) as score
+                    FROM memories
+                    WHERE NOT forgotten
+                    AND embedding IS NOT NULL
+                    AND embedding <=> $3::vector < 0.5  -- similarity > 0.5
+                ),
+                combined_scores AS (
+                    -- Combine all searches with weighted scoring
+                    SELECT 
+                        COALESCE(t.id, f.id, s.id) as id,
+                        (COALESCE(t.score, 0) * $4) +
+                        (COALESCE(f.score, 0) * $5) +
+                        (COALESCE(s.score, 0) * $6) as final_score
+                    FROM text_search t
+                    FULL OUTER JOIN feature_search f ON t.id = f.id
+                    FULL OUTER JOIN semantic_search s ON COALESCE(t.id, f.id) = s.id
+                )
+                SELECT m.id, m.content, m.embedding, m.metadata, c.final_score
+                FROM combined_scores c
+                JOIN memories m ON c.id = m.id
+                WHERE c.final_score > 0
+                ORDER BY c.final_score DESC
+                LIMIT $7
                 """,
-                query_embedding.tolist(),
-                limit,
+                query,  # $1 - for text search
+                query_lower,  # $2 - for feature matching
+                query_embedding.tolist(),  # $3 - for semantic search
+                TEXT_WEIGHT,  # $4
+                FEATURE_WEIGHT,  # $5
+                SEMANTIC_WEIGHT,  # $6
+                limit,  # $7
             )
 
             return [self._row_to_memory(row) for row in rows]
