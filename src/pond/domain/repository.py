@@ -1,19 +1,26 @@
 """Memory repository for database operations."""
 from __future__ import annotations
 
+import json
+import logging
+
 import numpy as np
 from pendulum import DateTime
 
+from pond.infrastructure.database import DatabasePool
+
 from .entities import Action, Entity
 from .memory import Memory
+
+logger = logging.getLogger(__name__)
 
 
 class MemoryRepository:
     """Repository for storing and retrieving memories."""
 
-    def __init__(self, pool, tenant: str):
+    def __init__(self, db_pool: DatabasePool, tenant: str):
         """Initialize with database pool and tenant name."""
-        self.pool = pool
+        self.db_pool = db_pool
         self.tenant = tenant
         self._nlp = None
 
@@ -120,20 +127,125 @@ class MemoryRepository:
 
     async def _store_in_db(self, memory: Memory) -> int:
         """Store memory in database, return ID."""
-        # TODO: Implement actual DB storage
-        return 42  # Placeholder
+        async with self.db_pool.acquire_tenant(self.tenant) as conn:
+            # Convert numpy array to list for storage
+            embedding_list = memory.embedding.tolist() if memory.embedding is not None else None
+
+            # Prepare metadata for JSON serialization
+            # Convert sets to lists since sets aren't JSON serializable
+            metadata_for_storage = memory.metadata.copy()
+            if "tags" in metadata_for_storage and isinstance(metadata_for_storage["tags"], set):
+                metadata_for_storage["tags"] = sorted(metadata_for_storage["tags"])
+
+            # Store and get the generated ID
+            row = await conn.fetchrow(
+                """
+                INSERT INTO memories (content, embedding, metadata)
+                VALUES ($1, $2, $3::jsonb)
+                RETURNING id
+                """,
+                memory.content,
+                embedding_list,
+                json.dumps(metadata_for_storage)  # Convert dict to JSON string
+            )
+            return row['id']
 
     async def _get_splash(self, memory: Memory) -> list[Memory]:
-        """Get memories in the similarity sweet spot (0.7-0.9)."""
-        # TODO: Implement actual similarity search
-        return []  # Placeholder
+        """Get memories in the similarity sweet spot (0.7-0.9).
+        
+        Returns up to 3 memories with similarity between 0.7 and 0.9.
+        Empty list is valid if no memories fall in this range.
+        """
+        if memory.embedding is None:
+            return []
+
+        async with self.db_pool.acquire_tenant(self.tenant) as conn:
+            # pgvector uses <=> for cosine distance (0 = identical, 2 = opposite)
+            # similarity = 1 - distance, so:
+            # distance < 0.3 means similarity > 0.7
+            # distance > 0.1 means similarity < 0.9
+            rows = await conn.fetch(
+                """
+                SELECT id, content, embedding, metadata, 
+                       1 - (embedding <=> $1) as similarity
+                FROM memories
+                WHERE NOT forgotten
+                AND embedding IS NOT NULL
+                AND embedding <=> $1 < 0.3  -- similarity > 0.7
+                AND embedding <=> $1 > 0.1  -- similarity < 0.9
+                ORDER BY embedding <=> $1
+                LIMIT 3
+                """,
+                memory.embedding.tolist()
+            )
+
+            return [self._row_to_memory(row) for row in rows]
 
     async def search(self, query: str, limit: int = 10) -> list[Memory]:
         """Search for memories by semantic similarity."""
-        # TODO: Implement
-        pass
+        # Get embedding for the query
+        query_embedding = await self._get_embedding(query)
+
+        async with self.db_pool.acquire_tenant(self.tenant) as conn:
+            rows = await conn.fetch(
+                """
+                SELECT id, content, embedding, metadata,
+                       1 - (embedding <=> $1) as similarity
+                FROM memories
+                WHERE NOT forgotten
+                AND embedding IS NOT NULL
+                ORDER BY embedding <=> $1
+                LIMIT $2
+                """,
+                query_embedding.tolist(),
+                limit
+            )
+
+            return [self._row_to_memory(row) for row in rows]
 
     async def get_recent(self, since: DateTime, limit: int = 10) -> list[Memory]:
         """Get recent memories since a given time."""
-        # TODO: Implement
-        pass
+        async with self.db_pool.acquire_tenant(self.tenant) as conn:
+            rows = await conn.fetch(
+                """
+                SELECT id, content, embedding, metadata
+                FROM memories
+                WHERE NOT forgotten
+                AND (metadata->>'created_at')::timestamptz >= $1
+                ORDER BY (metadata->>'created_at')::timestamptz DESC
+                LIMIT $2
+                """,
+                since,  # asyncpg handles datetime serialization
+                limit
+            )
+
+            return [self._row_to_memory(row) for row in rows]
+
+    def _row_to_memory(self, row: dict) -> Memory:
+        """Convert a database row to a Memory object."""
+        # Convert embedding back to numpy array if present
+        embedding = None
+        if row['embedding'] is not None:
+            embedding = np.array(row['embedding'])
+
+        # Convert metadata, restoring sets from lists
+        metadata = row['metadata']
+        # Handle case where metadata might be a string (from manual inserts)
+        if isinstance(metadata, str):
+            metadata = json.loads(metadata)
+        else:
+            # asyncpg automatically decodes JSONB to dict, so copy it
+            metadata = metadata.copy()
+
+        if "tags" in metadata and isinstance(metadata["tags"], list):
+            metadata["tags"] = set(metadata["tags"])
+
+        # Create memory with data from database
+        memory = Memory(
+            id=row['id'],
+            content=row['content'],
+            embedding=embedding,
+            metadata=metadata
+        )
+
+        return memory

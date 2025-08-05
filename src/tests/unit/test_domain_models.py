@@ -130,7 +130,7 @@ class TestMemory:
 
         assert data["id"] == 42
         assert data["content"] == "Test memory"
-        assert data["metadata"]["tags"] == ["python", "testing"]  # Sorted!
+        assert data["metadata"]["tags"] == ["python", "test"]  # Sorted, and "testing" normalized to "test"
         assert data["metadata"]["entities"] == [{"text": "Python", "type": "LANGUAGE"}]
         assert data["metadata"]["actions"] == [{"lemma": "test"}]
         assert data["forgotten"] is False

@@ -1047,6 +1047,7 @@ test = [
 
 [package.dev-dependencies]
 dev = [
+    { name = "pytest-asyncio" },
     { name = "pytest-benchmark" },
 ]
 
@@ -1076,7 +1077,10 @@ requires-dist = [
 provides-extras = ["test", "dev"]
 
 [package.metadata.requires-dev]
-dev = [{ name = "pytest-benchmark", specifier = ">=5.1.0" }]
+dev = [
+    { name = "pytest-asyncio", specifier = ">=1.1.0" },
+    { name = "pytest-benchmark", specifier = ">=5.1.0" },
+]
 
 [[package]]
 name = "preshed"
