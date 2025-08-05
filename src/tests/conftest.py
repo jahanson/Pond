@@ -36,16 +36,15 @@ def event_loop():
 @pytest_asyncio.fixture
 async def test_db() -> AsyncGenerator[str, None]:
     """Create an isolated test database with tenant schemas."""
-    # Use a fixed test database name (from DATABASE_URL)
-    # Each test will create/drop schemas, not databases
+    # Hard-coded test database name
     test_db_name = "pond_test"
 
     # Connect to postgres to ensure test database exists
     admin_conn = await asyncpg.connect(
-        host=settings.db_host,
-        port=settings.db_port,
-        user=settings.db_user,
-        password=settings.db_password,
+        host="localhost",
+        port=5432,
+        user="postgres",
+        password="postgres",
         database="postgres",
     )
 
@@ -61,10 +60,10 @@ async def test_db() -> AsyncGenerator[str, None]:
 
         # Connect to the test database to enable pgvector
         test_conn = await asyncpg.connect(
-            host=settings.db_host,
-            port=settings.db_port,
-            user=settings.db_user,
-            password=settings.db_password,
+            host="localhost",
+            port=5432,
+            user="postgres",
+            password="postgres",
             database=test_db_name,
         )
 
@@ -87,40 +86,17 @@ async def test_tenant(test_db: str) -> AsyncGenerator[str, None]:
     tenant_name = f"test_{uuid.uuid4().hex[:8]}"
 
     conn = await asyncpg.connect(
-        host=settings.db_host,
-        port=settings.db_port,
-        user=settings.db_user,
-        password=settings.db_password,
+        host="localhost",
+        port=5432,
+        user="postgres",
+        password="postgres",
         database=test_db,
     )
 
     try:
-        # Create schema for tenant
-        await conn.execute(f'CREATE SCHEMA IF NOT EXISTS "{tenant_name}"')
-
-        # Set search path to tenant schema
-        await conn.execute(f'SET search_path TO "{tenant_name}"')
-
-        # pgvector is already enabled at database level
-
-        # Create memories table in tenant schema
-        await conn.execute("""
-            CREATE TABLE memories (
-                id SERIAL PRIMARY KEY,
-                content TEXT NOT NULL,
-                tags JSONB DEFAULT '[]',
-                entities JSONB DEFAULT '[]',
-                actions JSONB DEFAULT '[]',
-                embedding public.vector(768),
-                created_at TIMESTAMPTZ DEFAULT NOW(),
-                active BOOLEAN DEFAULT true
-            );
-            
-            CREATE INDEX idx_memories_created_at ON memories(created_at);
-            CREATE INDEX idx_memories_embedding ON memories 
-            USING ivfflat (embedding vector_cosine_ops);
-            CREATE INDEX idx_memories_entities ON memories USING gin(entities);
-        """)
+        # Use our schema creation function to set up the tenant properly
+        from pond.infrastructure.schema import ensure_tenant_schema
+        await ensure_tenant_schema(conn, tenant_name)
 
         yield tenant_name
 
