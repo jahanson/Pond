@@ -2,7 +2,6 @@
 
 import asyncio
 import sys
-from typing import Optional
 
 import click
 import structlog
@@ -61,7 +60,7 @@ def tenant_list(ctx):
                         click.echo(f"  - {t}")
         finally:
             await pool.close()
-    
+
     asyncio.run(_list())
 
 
@@ -75,30 +74,30 @@ def tenant_create(ctx, name: str, with_key: bool):
         pool = DatabasePool()
         try:
             await pool.initialize()
-            
+
             # Check if tenant already exists
             async with pool.acquire() as conn:
                 if await tenant_exists(conn, name):
                     click.echo(f"Error: Tenant '{name}' already exists.", err=True)
                     sys.exit(1)
-                
+
                 # Create the tenant schema
                 await ensure_tenant_schema(conn, name)
                 click.echo(f"✓ Created tenant: {name}")
-            
+
             # Generate API key if requested
             if with_key:
                 api_key_manager = APIKeyManager(pool)
                 key = await api_key_manager.create_key(
-                    name, 
+                    name,
                     description=f"Initial key for {name}"
                 )
                 click.echo(f"✓ Generated API key: {key}")
                 click.echo("\n⚠️  Save this key now! It cannot be retrieved later.")
-                
+
         finally:
             await pool.close()
-    
+
     asyncio.run(_create())
 
 
@@ -113,30 +112,30 @@ def key(ctx):
 @click.argument("tenant")
 @click.option("--description", "-d", help="Description for the key")
 @click.pass_context
-def key_generate(ctx, tenant: str, description: Optional[str]):
+def key_generate(ctx, tenant: str, description: str | None):
     """Generate a new API key for a tenant."""
     async def _generate():
         pool = DatabasePool()
         try:
             await pool.initialize()
-            
+
             # Check tenant exists
             async with pool.acquire() as conn:
                 if not await tenant_exists(conn, tenant):
                     click.echo(f"Error: Tenant '{tenant}' does not exist.", err=True)
                     sys.exit(1)
-            
+
             # Generate key
             api_key_manager = APIKeyManager(pool)
             key = await api_key_manager.create_key(tenant, description)
-            
+
             click.echo(f"Generated API key for tenant '{tenant}':")
             click.echo(f"  {key}")
             click.echo("\n⚠️  Save this key now! It cannot be retrieved later.")
-            
+
         finally:
             await pool.close()
-    
+
     asyncio.run(_generate())
 
 
@@ -149,17 +148,17 @@ def key_list(ctx, tenant: str):
         pool = DatabasePool()
         try:
             await pool.initialize()
-            
+
             # Check tenant exists
             async with pool.acquire() as conn:
                 if not await tenant_exists(conn, tenant):
                     click.echo(f"Error: Tenant '{tenant}' does not exist.", err=True)
                     sys.exit(1)
-            
+
             # List keys
             api_key_manager = APIKeyManager(pool)
             keys = await api_key_manager.list_keys(tenant)
-            
+
             if not keys:
                 click.echo(f"No API keys found for tenant '{tenant}'.")
             else:
@@ -170,10 +169,10 @@ def key_list(ctx, tenant: str):
                     click.echo(f"  ID: {k['id']} | {status} | Last used: {last_used}")
                     if k["description"]:
                         click.echo(f"      {k['description']}")
-            
+
         finally:
             await pool.close()
-    
+
     asyncio.run(_list())
 
 
@@ -181,35 +180,35 @@ def key_list(ctx, tenant: str):
 @click.argument("tenant")
 @click.option("--old-key", help="Specific key to rotate (deactivates all if not specified)")
 @click.pass_context
-def key_rotate(ctx, tenant: str, old_key: Optional[str]):
+def key_rotate(ctx, tenant: str, old_key: str | None):
     """Rotate API keys for a tenant."""
     async def _rotate():
         pool = DatabasePool()
         try:
             await pool.initialize()
-            
+
             # Check tenant exists
             async with pool.acquire() as conn:
                 if not await tenant_exists(conn, tenant):
                     click.echo(f"Error: Tenant '{tenant}' does not exist.", err=True)
                     sys.exit(1)
-            
+
             # Rotate key(s)
             api_key_manager = APIKeyManager(pool)
             new_key = await api_key_manager.rotate_key(tenant, old_key)
-            
+
             if old_key:
-                click.echo(f"✓ Deactivated old key")
+                click.echo("✓ Deactivated old key")
             else:
                 click.echo(f"✓ Deactivated all existing keys for tenant '{tenant}'")
-            
-            click.echo(f"✓ Generated new API key:")
+
+            click.echo("✓ Generated new API key:")
             click.echo(f"  {new_key}")
             click.echo("\n⚠️  Save this key now! It cannot be retrieved later.")
-            
+
         finally:
             await pool.close()
-    
+
     asyncio.run(_rotate())
 
 
@@ -223,13 +222,13 @@ def key_deactivate(ctx, tenant: str, key_id: int):
         pool = DatabasePool()
         try:
             await pool.initialize()
-            
+
             # Check tenant exists
             async with pool.acquire() as conn:
                 if not await tenant_exists(conn, tenant):
                     click.echo(f"Error: Tenant '{tenant}' does not exist.", err=True)
                     sys.exit(1)
-            
+
             # Deactivate key
             api_key_manager = APIKeyManager(pool)
             if await api_key_manager.deactivate_key(tenant, key_id):
@@ -237,10 +236,10 @@ def key_deactivate(ctx, tenant: str, key_id: int):
             else:
                 click.echo(f"Error: Key {key_id} not found or already inactive.", err=True)
                 sys.exit(1)
-            
+
         finally:
             await pool.close()
-    
+
     asyncio.run(_deactivate())
 
 

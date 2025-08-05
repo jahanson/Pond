@@ -1,11 +1,13 @@
 """Memory management API endpoints."""
 
 import structlog
-from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi import APIRouter, Depends, HTTPException, status
 
 from pond.api.dependencies import get_repository, get_tenant
 from pond.api.models import (
     MemoryResponse,
+    SearchRequest,
+    SearchResponse,
     StoreRequest,
     StoreResponse,
 )
@@ -21,7 +23,6 @@ router = APIRouter(
 
 @router.post("/store", response_model=StoreResponse)
 async def store_memory(
-    request: Request,
     store_request: StoreRequest,
     tenant: str = Depends(get_tenant),
     repository: MemoryRepository = Depends(get_repository),
@@ -39,28 +40,27 @@ async def store_memory(
             content_length=len(store_request.content),
             tag_count=len(store_request.tags),
         )
-        
+
         memory, splash_memories = await repository.store(
             content=store_request.content,
             user_tags=store_request.tags,
         )
-        
+
         logger.info(
             "memory_stored",
             tenant=tenant,
             memory_id=memory.id,
             splash_count=len(splash_memories),
         )
-        
+
         # Convert to response models
-        memory_response = MemoryResponse.from_memory(memory)
         splash_response = [MemoryResponse.from_memory(m) for m in splash_memories]
-        
+
         return StoreResponse(
             id=memory.id,
             splash=splash_response,
         )
-        
+
     except ValueError as e:
         # Validation errors from the repository
         logger.warning(
@@ -82,4 +82,95 @@ async def store_memory(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to store memory",
+        )
+
+
+@router.post("/search", response_model=SearchResponse)
+async def search_memories(
+    search_request: SearchRequest,
+    tenant: str = Depends(get_tenant),
+    repository: MemoryRepository = Depends(get_repository),
+) -> SearchResponse:
+    """Search memories or return recent memories if no query.
+    
+    Empty query returns recent memories (last 24 hours by default).
+    Non-empty query uses unified search across text, features, and semantics.
+    """
+    try:
+        if not search_request.query:
+            # Empty query - return recent memories
+            logger.info(
+                "fetching_recent_memories",
+                tenant=tenant,
+                limit=search_request.limit,
+            )
+
+            # Get memories from last 24 hours
+            from datetime import timedelta
+
+            from pond.utils.time_service import TimeService
+
+            time_service = TimeService()
+            since = time_service.now() - timedelta(hours=24)
+
+            memories = await repository.get_recent(
+                since=since,
+                limit=search_request.limit,
+            )
+
+            logger.info(
+                "recent_memories_fetched",
+                tenant=tenant,
+                count=len(memories),
+            )
+        else:
+            # Search with query
+            logger.info(
+                "searching_memories",
+                tenant=tenant,
+                query=search_request.query,
+                limit=search_request.limit,
+            )
+
+            memories = await repository.search(
+                query=search_request.query,
+                limit=search_request.limit,
+            )
+
+            logger.info(
+                "search_completed",
+                tenant=tenant,
+                query=search_request.query,
+                result_count=len(memories),
+            )
+
+        # Convert to response models
+        memory_responses = [MemoryResponse.from_memory(m) for m in memories]
+
+        return SearchResponse(
+            memories=memory_responses,
+            count=len(memory_responses),
+        )
+
+    except ValueError as e:
+        # Validation errors
+        logger.warning(
+            "search_validation_error",
+            tenant=tenant,
+            error=str(e),
+        )
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(e),
+        )
+    except Exception as e:
+        # Unexpected errors
+        logger.exception(
+            "search_error",
+            tenant=tenant,
+            error=str(e),
+        )
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to search memories",
         )

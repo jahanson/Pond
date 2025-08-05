@@ -1,16 +1,14 @@
 """API middleware for auth, request tracking, and error handling."""
 
-import secrets
 import time
 import uuid
-from typing import Callable
+from collections.abc import Callable
 
 import structlog
 from fastapi import Request, Response, status
 from fastapi.responses import JSONResponse
 from starlette.middleware.base import BaseHTTPMiddleware
 
-from pond.config import settings
 from pond.infrastructure.auth import APIKeyManager
 
 logger = structlog.get_logger()
@@ -22,13 +20,13 @@ class RequestIDMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next: Callable) -> Response:
         """Process request and add request ID."""
         request_id = str(uuid.uuid4())
-        
+
         # Store in request state for other middleware/handlers
         request.state.request_id = request_id
-        
+
         # Add to structlog context
         structlog.contextvars.bind_contextvars(request_id=request_id)
-        
+
         try:
             response = await call_next(request)
             response.headers["X-Request-ID"] = request_id
@@ -44,7 +42,7 @@ class LoggingMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next: Callable) -> Response:
         """Log request details and response status."""
         start_time = time.time()
-        
+
         # Log request
         logger.info(
             "request_started",
@@ -52,19 +50,19 @@ class LoggingMiddleware(BaseHTTPMiddleware):
             path=request.url.path,
             client=request.client.host if request.client else None,
         )
-        
+
         response = await call_next(request)
-        
+
         # Calculate duration
         duration_ms = (time.time() - start_time) * 1000
-        
+
         # Log response
         logger.info(
             "request_completed",
             status_code=response.status_code,
             duration_ms=round(duration_ms, 2),
         )
-        
+
         return response
 
 
@@ -78,14 +76,14 @@ class ErrorHandlingMiddleware(BaseHTTPMiddleware):
         except Exception as exc:
             # Get request ID if available
             request_id = getattr(request.state, "request_id", "unknown")
-            
+
             # Log the full exception internally
             logger.exception(
                 "unhandled_exception",
                 exc_type=type(exc).__name__,
                 exc_message=str(exc),
             )
-            
+
             # Return user-friendly error
             return JSONResponse(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -112,7 +110,7 @@ class AuthenticationMiddleware(BaseHTTPMiddleware):
         # Skip auth for public paths
         if request.url.path in self.PUBLIC_PATHS:
             return await call_next(request)
-        
+
         # Check if we're in development mode (no auth)
         # This is determined by checking if any API keys exist in the database
         # We'll handle this check in the lifespan/startup
@@ -125,29 +123,29 @@ class AuthenticationMiddleware(BaseHTTPMiddleware):
             else:
                 request.state.tenant = None
             return await call_next(request)
-        
+
         # Check API key header
         provided_key = request.headers.get("X-API-Key")
-        
+
         if not provided_key:
             return JSONResponse(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 content={"error": "Unauthorized"},
             )
-        
+
         # Validate key and get tenant
         api_key_manager: APIKeyManager = request.app.state.api_key_manager
         tenant = await api_key_manager.validate_key(provided_key)
-        
+
         if not tenant:
             return JSONResponse(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 content={"error": "Unauthorized"},
             )
-        
+
         # Store tenant in request state for use by endpoints
         request.state.tenant = tenant
-        
+
         # Also validate that the tenant in the URL matches the key's tenant
         # Path format: /api/v1/{tenant}/...
         path_parts = request.url.path.strip("/").split("/")
@@ -158,5 +156,5 @@ class AuthenticationMiddleware(BaseHTTPMiddleware):
                     status_code=status.HTTP_403_FORBIDDEN,
                     content={"error": "API key not authorized for this tenant"},
                 )
-        
+
         return await call_next(request)

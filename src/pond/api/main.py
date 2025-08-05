@@ -38,16 +38,16 @@ async def lifespan(app: FastAPI):
     """Handle application startup and shutdown."""
     # Run configuration check
     check_configuration()
-    
+
     # Initialize database pool
     logger.info("initializing_database_pool")
     app.state.db_pool = DatabasePool()
     await app.state.db_pool.initialize()
     logger.info("database_pool_ready")
-    
+
     # Initialize API key manager
     app.state.api_key_manager = APIKeyManager(app.state.db_pool)
-    
+
     # Check if we should disable auth (development mode)
     # We'll disable auth if no API keys exist in any tenant
     auth_disabled = True
@@ -58,15 +58,15 @@ async def lifespan(app: FastAPI):
             if keys:
                 auth_disabled = False
                 break
-    
+
     app.state.auth_disabled = auth_disabled
     if auth_disabled:
         logger.warning("No API keys found - authentication disabled for development")
     else:
         logger.info(f"API key authentication enabled ({len(tenants)} tenants configured)")
-    
+
     yield
-    
+
     # Cleanup
     logger.info("closing_database_pool")
     await app.state.db_pool.close()

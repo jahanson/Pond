@@ -30,7 +30,7 @@ async def get_repository(
     except Exception:
         # Running in degraded mode without embeddings
         embedding_provider = None
-    
+
     return MemoryRepository(db_pool, tenant, embedding_provider)
 
 
@@ -53,14 +53,14 @@ async def get_tenant(
     """
     # The middleware stores the authenticated tenant in request.state
     auth_tenant = getattr(request.state, "tenant", None)
-    
+
     # In development mode with auth disabled, use the URL tenant
     if auth_tenant is None:
         return tenant
-    
+
     # In production, ensure URL tenant matches authenticated tenant
     if auth_tenant != tenant:
         # This shouldn't happen - middleware should have caught it
         raise ValueError(f"Tenant mismatch: {tenant} != {auth_tenant}")
-    
+
     return tenant

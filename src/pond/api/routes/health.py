@@ -20,11 +20,11 @@ async def health_check(db_pool: DatabasePool = Depends(get_db_pool)) -> SystemHe
         db_status = "healthy"
     except Exception:
         db_status = "unhealthy"
-    
+
     # Check embeddings
     embedding_health = get_health_status()
     embedding_status = "healthy" if embedding_health["healthy"] else "degraded"
-    
+
     return SystemHealthResponse(
         status="healthy" if db_status == "healthy" else "degraded",
         database=db_status,

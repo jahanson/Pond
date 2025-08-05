@@ -73,7 +73,7 @@ async def ensure_tenant_schema(conn: Connection, tenant: str) -> None:
             active BOOLEAN DEFAULT true
         )
     """)
-    
+
     # Create indexes for performance
     # Note: CREATE INDEX IF NOT EXISTS requires PostgreSQL 9.5+
 

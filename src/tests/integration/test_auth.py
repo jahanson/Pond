@@ -15,7 +15,7 @@ async def test_auth_required_for_api_endpoints(test_db: str):
     """Test that API endpoints require authentication."""
     # Client without API key
     from httpx import ASGITransport
-    
+
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://test") as client:
         # These should all return 401
@@ -38,11 +38,11 @@ async def test_health_check_no_auth_required(test_db: str):
     # Initialize db_pool for the app
     app.state.db_pool = DatabasePool()
     await app.state.db_pool.initialize()
-    
+
     try:
         # Client without API key
         from httpx import ASGITransport
-        
+
         transport = ASGITransport(app=app)
         async with AsyncClient(transport=transport, base_url="http://test") as client:
             response = await client.get("/api/v1/health")
@@ -67,7 +67,7 @@ async def test_valid_api_key_accepted(test_client, mock_ollama_response):
 async def test_wrong_api_key_rejected(test_db: str):
     """Test that wrong API key is rejected."""
     from httpx import ASGITransport
-    
+
     transport = ASGITransport(app=app)
     async with AsyncClient(
         transport=transport, base_url="http://test", headers={"X-API-Key": "wrong-key"}
