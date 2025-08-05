@@ -27,7 +27,6 @@ class Settings(BaseSettings):
 
     # API
     port: int = 8000
-    api_key: str | None = None
 
     # External services
     ollama_url: str = "http://localhost:11434"

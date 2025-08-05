@@ -1,5 +1,6 @@
 """Main FastAPI application."""
 
+import logging
 from contextlib import asynccontextmanager
 
 import structlog
@@ -31,6 +32,22 @@ structlog.configure(
 )
 
 logger = structlog.get_logger()
+
+
+class HealthCheckFilter(logging.Filter):
+    """Filter out health check logs from uvicorn."""
+    
+    def filter(self, record: logging.LogRecord) -> bool:
+        """Return False to suppress health check logs."""
+        if hasattr(record, 'args') and record.args:
+            # Check if this is a uvicorn access log for health endpoint
+            if len(record.args) >= 3 and '/api/v1/health' in str(record.args[2]):
+                return False
+        return True
+
+
+# Apply filter to uvicorn access logger
+logging.getLogger("uvicorn.access").addFilter(HealthCheckFilter())
 
 
 @asynccontextmanager
@@ -72,21 +89,36 @@ async def lifespan(app: FastAPI):
     await app.state.db_pool.close()
 
 
+# Create v1 API app
+api_v1 = FastAPI(
+    title="Pond API v1",
+    description="Semantic memory system for AI assistants",
+    version="1.0.0",
+    docs_url="/docs",
+    openapi_url="/openapi.json",
+)
+
+# Include v1 routes
+from .routes import health, memories  # noqa: E402
+
+api_v1.include_router(health.router)
+api_v1.include_router(memories.router)
+
+# Create main app and mount v1
 app = FastAPI(
     title="Pond",
     description="Semantic memory system for AI assistants",
-    version="0.1.0",
     lifespan=lifespan,
+    docs_url=None,  # Disable docs at root
+    openapi_url=None,  # Disable openapi at root
+    redoc_url=None,  # Disable redoc at root
 )
 
-# Add middleware in reverse order (last added = first executed)
+# Mount v1 API
+app.mount("/api/v1", api_v1)
+
+# Add middleware to main app
 app.add_middleware(AuthenticationMiddleware)
 app.add_middleware(ErrorHandlingMiddleware)
 app.add_middleware(LoggingMiddleware)
 app.add_middleware(RequestIDMiddleware)
-
-# Include routes
-from .routes import health, memories  # noqa: E402
-
-app.include_router(health.router)
-app.include_router(memories.router)

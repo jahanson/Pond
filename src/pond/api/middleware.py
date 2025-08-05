@@ -44,6 +44,10 @@ class LoggingMiddleware(BaseHTTPMiddleware):
         """Log request details and response status."""
         start_time = time.time()
 
+        # Skip logging for health checks (too noisy)
+        if request.url.path == "/api/v1/health":
+            return await call_next(request)
+
         # Log request
         logger.info(
             "request_started",
@@ -101,9 +105,10 @@ class AuthenticationMiddleware(BaseHTTPMiddleware):
     # Paths that don't require authentication
     PUBLIC_PATHS: ClassVar[set[str]] = {
         "/api/v1/health",
-        "/docs",
-        "/openapi.json",
-        "/redoc",
+        "/api/v1/docs",
+        "/api/v1/openapi.json",
+        "/api/v1/redoc",
+        "/favicon.ico",  # Browser auto-requests this
     }
 
     async def dispatch(self, request: Request, call_next: Callable) -> Response:

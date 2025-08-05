@@ -118,7 +118,6 @@ All-or-nothing approach - any failure rejects entire memory:
 # Required
 DATABASE_URL=postgresql://localhost:5432/pond
 OLLAMA_URL=http://localhost:11434
-API_KEY=your-secret-key
 
 # Optional
 PORT=8000

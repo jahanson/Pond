@@ -16,7 +16,6 @@ def mock_settings():
     settings.ollama_url = "http://localhost:11434"
     settings.ollama_embedding_model = "nomic-embed-text"
     settings.ollama_embedding_timeout = 60
-    settings.api_key = "test-key"
     settings.db_pool_min_size = 10
     settings.db_pool_max_size = 20
     return settings

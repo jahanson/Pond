@@ -102,7 +102,7 @@ async def test_tenant_isolation(test_db, mock_ollama_response):
         # Now test with the API
         async with AsyncClient(
             base_url=f"http://test:{settings.port}",
-            headers={"X-API-Key": settings.api_key or "test-key"},
+            headers={"X-API-Key": "test-key"},
         ) as client:
             # Store memory for Claude
             await client.post(

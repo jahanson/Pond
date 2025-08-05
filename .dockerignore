@@ -1,0 +1,65 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+.venv/
+venv/
+ENV/
+env/
+
+# Testing
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/
+.hypothesis/
+
+# Development
+*.log
+*.pot
+*.mo
+.git/
+.gitignore
+.github/
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Documentation
+docs/
+CLAUDE.md
+LICENSE
+# Don't ignore README.md - it's needed by pyproject.toml
+# README.md is explicitly included
+
+# Build artifacts
+build/
+dist/
+*.egg-info/
+.eggs/
+
+# Environment files (we'll use compose env vars)
+.env
+.env.*
+
+# Database
+*.db
+*.sqlite
+*.sqlite3
+
+# macOS
+.DS_Store
+
+# Docker
+Dockerfile
+docker-compose.yml
+.dockerignore
+
+# Temporary files
+tmp/
+temp/
+/tmp/

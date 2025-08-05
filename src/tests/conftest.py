@@ -121,7 +121,7 @@ async def test_client(
         async with AsyncClient(
             transport=test_client.transport,
             base_url="http://test",
-            headers={"X-API-Key": settings.api_key or "test-key"},
+            headers={"X-API-Key": "test-key"},
         ) as client:
             # Store tenant name for tests to use
             client.test_tenant = test_tenant
