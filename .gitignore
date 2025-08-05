@@ -34,6 +34,7 @@ node_modules/
 *.sqlite
 .env
 .env.local
+docker-compose.override.yml
 
 # Static build output (will be built during deployment)
 src/pond/static/

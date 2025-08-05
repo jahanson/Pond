@@ -1,0 +1,11 @@
+# Docker Compose Override Configuration
+# Copy this file to docker-compose.override.yml when running in Docker
+# This overrides DATABASE_URL and OLLAMA_URL to use host.docker.internal
+
+services:
+  pond:
+    environment:
+      # Override database connection for Docker
+      - DATABASE_URL=postgresql://postgres:password@host.docker.internal:5432/pond
+      # Override Ollama endpoint for Docker  
+      - OLLAMA_URL=http://host.docker.internal:11434

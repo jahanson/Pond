@@ -114,7 +114,9 @@ app = FastAPI(
     redoc_url=None,  # Disable redoc at root
 )
 
-# Mount v1 API
+# Mount v1 API  
+# Share the main app's state with the sub-app
+api_v1.state = app.state
 app.mount("/api/v1", api_v1)
 
 # Add middleware to main app

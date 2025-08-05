@@ -20,7 +20,7 @@ from pond.domain.repository import MemoryRepository
 logger = structlog.get_logger()
 
 router = APIRouter(
-    prefix="/api/v1/{tenant}",
+    prefix="/{tenant}",
     tags=["memories"],
 )
 

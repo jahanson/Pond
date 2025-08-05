@@ -14,7 +14,7 @@ logger = structlog.get_logger()
 router = APIRouter(tags=["health"])
 
 
-@router.get("/api/v1/health", response_model=SystemHealthResponse)
+@router.get("/health", response_model=SystemHealthResponse)
 async def health_check(db_pool: DatabasePool = Depends(get_db_pool)) -> SystemHealthResponse:  # noqa: B008
     """System health check - no authentication required."""
     # Check database
@@ -36,7 +36,7 @@ async def health_check(db_pool: DatabasePool = Depends(get_db_pool)) -> SystemHe
     )
 
 
-@router.get("/api/v1/{tenant}/health", response_model=TenantHealthResponse)
+@router.get("/{tenant}/health", response_model=TenantHealthResponse)
 async def tenant_health_check(
     tenant: str = Depends(get_tenant),
     repository: MemoryRepository = Depends(get_repository),  # noqa: B008
