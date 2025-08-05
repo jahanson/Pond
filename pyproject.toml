@@ -13,12 +13,12 @@ dependencies = [
     "pydantic>=2.9.0",
     "pydantic-settings>=2.5.0",
     "numpy>=1.26.0",
-    "click>=8.1.0",  # For CLI
-    "fastmcp>=0.2.0",  # For MCP server
-    "spacy>=3.7.0",  # For NLP and entity extraction
-    "inflect>=7.0.0",  # For tag normalization
-    "pendulum>=3.0.0",  # For datetime parsing and formatting
-    "pytimeparse>=1.1.8",  # For parsing time intervals like "6 hours"
+    "click>=8.1.0", # For CLI
+    "fastmcp>=0.2.0", # For MCP server
+    "spacy>=3.7.0", # For NLP and entity extraction
+    "inflect>=7.0.0", # For tag normalization
+    "pendulum>=3.0.0", # For datetime parsing and formatting
+    "pytimeparse>=1.1.8",
 ]
 
 [project.scripts]
@@ -43,10 +43,18 @@ python_files = ["test_*.py"]
 python_classes = ["Test*"]
 python_functions = ["test_*"]
 asyncio_mode = "auto"
+markers = [
+    "slow: marks tests as slow (deselect with '-m \"not slow\"')",
+]
 
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
+
+[dependency-groups]
+dev = [
+    "pytest-benchmark>=5.1.0",
+]
 
 [tool.uv]
 package = true
