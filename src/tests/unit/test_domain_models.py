@@ -1,7 +1,7 @@
 """Tests for domain models."""
 import pytest
 
-from pond.models import Tag, Memory, Entity, Action, ValidationError, MAX_CONTENT_LENGTH
+from pond.domain import Tag, Memory, Entity, Action, ValidationError, MAX_CONTENT_LENGTH
 
 
 class TestTag:
@@ -61,7 +61,7 @@ class TestMemory:
         
         assert memory.content == "Sparkle stole pizza from the counter"
         assert memory.forgotten is False
-        assert memory.metadata["tags"] == []
+        assert memory.metadata["tags"] == set()
         assert memory.metadata["entities"] == []
         assert memory.metadata["actions"] == []
         assert "created_at" in memory.metadata
@@ -130,10 +130,40 @@ class TestMemory:
         
         assert data["id"] == 42
         assert data["content"] == "Test memory"
-        assert data["metadata"]["tags"] == ["python", "testing"]
+        assert data["metadata"]["tags"] == ["python", "testing"]  # Sorted!
         assert data["metadata"]["entities"] == [{"text": "Python", "type": "LANGUAGE"}]
         assert data["metadata"]["actions"] == [{"lemma": "test"}]
         assert data["forgotten"] is False
+    
+    def test_memory_from_dict(self):
+        """Test deserializing memory from dictionary."""
+        data = {
+            "id": 42,
+            "content": "Test memory",
+            "forgotten": False,
+            "embedding": [0.1, 0.2, 0.3],  # Small test embedding
+            "metadata": {
+                "created_at": "2024-01-01T00:00:00Z",
+                "tags": ["python", "testing"],  # List from DB
+                "entities": [{"text": "Python", "type": "LANGUAGE"}],
+                "actions": [{"lemma": "test"}],
+            }
+        }
+        
+        memory = Memory.from_dict(data)
+        
+        assert memory.id == 42
+        assert memory.content == "Test memory"
+        assert memory.forgotten is False
+        assert memory.embedding.shape == (3,)
+        assert memory.metadata["tags"] == {"python", "testing"}  # Converted to set!
+        assert memory.get_tags() == ["python", "testing"]  # Sorted list
+        
+        # Verify smart objects work
+        entities = memory.get_entities()
+        assert len(entities) == 1
+        assert entities[0].text == "Python"
+        assert entities[0].type == "LANGUAGE"
 
 
 class TestMetadataItems:
