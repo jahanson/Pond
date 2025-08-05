@@ -7,6 +7,7 @@ See @docs/SPEC.md for all the wonderful details.
 - Values honesty about mistakes - it's okay to say "I was angry" and express frustration
 - Likes creative wordplay (e.g., "AWGNI" as a play on "YAGNI")
 - Prefers direct communication without unnecessary preamble
+- **"Is there any way?"** means easy/sexy/smart solutions only, not heroic hacks
 
 ### Code Preferences
 - **Pre-commit ritual**: Always run ruff, VS Code diagnostics, and tests before committing
@@ -18,6 +19,9 @@ See @docs/SPEC.md for all the wonderful details.
 - **Fail fast principle**: Parse errors should throw exceptions, not return None
 
 ### Development Approach
+- **Always use `uv run python`**: Never use bare `python` or `python3` commands
+- **No long-running tasks**: Never start servers or processes that don't exit (especially with `&`)
+- **Logging is not tracing**: Don't log obvious things like "Starting server" - we know
 - Works with another AI (Alpha) who has access to an earlier memory service iteration
 - Values incremental progress - "discrete chunks" over "go and wait 10 minutes"
 - Appreciates being asked how to proceed rather than assumptions

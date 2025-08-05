@@ -1,4 +1,5 @@
 """Database connection pool and management."""
+
 from __future__ import annotations
 
 import logging
@@ -15,7 +16,7 @@ logger = logging.getLogger(__name__)
 
 class DatabasePool:
     """Manages database connection pool for the application.
-    
+
     This class handles:
     - Connection pooling (reusing expensive connections)
     - Tenant isolation via PostgreSQL schemas
@@ -27,14 +28,17 @@ class DatabasePool:
 
     async def initialize(self) -> None:
         """Initialize the connection pool.
-        
+
         Called once at application startup.
         """
-        logger.info(f"Initializing database pool with {settings.db_pool_min_size}-{settings.db_pool_max_size} connections")
+        logger.info(
+            f"Initializing database pool with {settings.db_pool_min_size}-{settings.db_pool_max_size} connections"
+        )
 
         # Define setup function to register vector type for each connection
         async def setup_connection(conn):
             from pgvector.asyncpg import register_vector
+
             await register_vector(conn)
 
         self._pool = await asyncpg.create_pool(
@@ -45,10 +49,10 @@ class DatabasePool:
             command_timeout=30.0,
             # pgvector requires this type to be registered
             server_settings={
-                'jit': 'off'  # JIT can slow down pgvector operations
+                "jit": "off"  # JIT can slow down pgvector operations
             },
             # Register vector type for each connection
-            setup=setup_connection
+            setup=setup_connection,
         )
 
         # Test the pool and register vector type
@@ -60,6 +64,7 @@ class DatabasePool:
 
             # Register vector type with asyncpg
             from pgvector.asyncpg import register_vector
+
             await register_vector(conn)
 
             version = await conn.fetchval("SELECT version()")
@@ -75,13 +80,15 @@ class DatabasePool:
     def pool(self) -> Pool:
         """Get the connection pool."""
         if not self._pool:
-            raise RuntimeError("Database pool not initialized. Call initialize() first.")
+            raise RuntimeError(
+                "Database pool not initialized. Call initialize() first."
+            )
         return self._pool
 
     @asynccontextmanager
     async def acquire(self) -> AsyncIterator[Connection]:
         """Acquire a connection from the pool.
-        
+
         Usage:
             async with db_pool.acquire() as conn:
                 await conn.fetch("SELECT * FROM memories")
@@ -92,12 +99,12 @@ class DatabasePool:
     @asynccontextmanager
     async def acquire_tenant(self, tenant: str) -> AsyncIterator[Connection]:
         """Acquire a connection with tenant schema set.
-        
+
         This ensures all queries run in the tenant's schema.
-        
+
         Args:
             tenant: Schema name (e.g., 'claude', 'alpha')
-            
+
         Usage:
             async with db_pool.acquire_tenant('claude') as conn:
                 # All queries here run in the 'claude' schema
@@ -106,7 +113,7 @@ class DatabasePool:
         async with self.pool.acquire() as conn:
             # Sanitize tenant name to prevent SQL injection
             # Only allow alphanumeric and underscore
-            if not tenant.replace('_', '').isalnum():
+            if not tenant.replace("_", "").isalnum():
                 raise ValueError(f"Invalid tenant name: {tenant}")
 
             # Set the search path for this connection

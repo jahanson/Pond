@@ -1,9 +1,11 @@
 """Base classes and protocols for domain models."""
+
 from typing import Protocol, TypeVar
 
 
 class ValidationError(Exception):
     """Raised when validation fails."""
+
     pass
 
 
@@ -11,7 +13,7 @@ class ValidationError(Exception):
 MAX_CONTENT_LENGTH = 7500
 
 
-T = TypeVar('T', bound='MetadataItem')
+T = TypeVar("T", bound="MetadataItem")
 
 
 class MetadataItem(Protocol):

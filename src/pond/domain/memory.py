@@ -1,4 +1,5 @@
 """Memory domain model."""
+
 from __future__ import annotations
 
 from dataclasses import dataclass, field
@@ -22,12 +23,14 @@ class Memory:
     forgotten: bool = False
 
     # Flexible metadata (JSONB)
-    metadata: dict = field(default_factory=lambda: {
-        "created_at": pendulum.now("UTC").isoformat(),
-        "tags": set(),  # Stored as set internally, serialized as list
-        "entities": [],
-        "actions": [],
-    })
+    metadata: dict = field(
+        default_factory=lambda: {
+            "created_at": pendulum.now("UTC").isoformat(),
+            "tags": set(),  # Stored as set internally, serialized as list
+            "entities": [],
+            "actions": [],
+        }
+    )
 
     def __post_init__(self):
         """Validate the memory after creation."""
@@ -125,7 +128,9 @@ class Memory:
         return {
             "id": self.id,
             "content": self.content,
-            "embedding": self.embedding.tolist() if self.embedding is not None else None,
+            "embedding": self.embedding.tolist()
+            if self.embedding is not None
+            else None,
             "forgotten": self.forgotten,
             "metadata": metadata,
         }

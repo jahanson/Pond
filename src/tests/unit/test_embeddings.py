@@ -1,6 +1,7 @@
 """
 Unit tests for embedding functionality.
 """
+
 from unittest.mock import AsyncMock, patch
 
 import pytest
@@ -11,10 +12,7 @@ async def test_ollama_embedding_request_format():
     """Test that we send the correct request to Ollama."""
     # This is what we expect to send to Ollama
     expected_url = "http://localhost:11434/api/embeddings"
-    expected_json = {
-        "model": "nomic-embed-text",
-        "prompt": "Test memory content"
-    }
+    expected_json = {"model": "nomic-embed-text", "prompt": "Test memory content"}
 
     # Mock the httpx client
     with patch("httpx.AsyncClient.post") as mock_post:
@@ -24,13 +22,11 @@ async def test_ollama_embedding_request_format():
 
         # This is what our embedding service should do
         from pond.services.embeddings import get_embedding
+
         result = await get_embedding("Test memory content")
 
         # Verify the call
-        mock_post.assert_called_once_with(
-            expected_url,
-            json=expected_json
-        )
+        mock_post.assert_called_once_with(expected_url, json=expected_json)
         assert len(result) == 768
         assert all(isinstance(x, float) for x in result)
 

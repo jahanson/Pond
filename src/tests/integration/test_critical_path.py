@@ -1,6 +1,7 @@
 """
 Critical path tests for Pond's core functionality.
 """
+
 import asyncpg
 import pytest
 from httpx import AsyncClient
@@ -12,10 +13,13 @@ from pond.config import settings
 async def test_store_memory_with_splash(test_client, mock_ollama_response):
     """Test that storing a memory returns relevant splash memories."""
     # Store first memory about Sparkle
-    response1 = await test_client.post(f"/api/v1/{test_client.test_tenant}/store", json={
-        "content": "Sparkle stole pizza from the counter",
-        "tags": ["sparkle", "theft", "pizza"]
-    })
+    response1 = await test_client.post(
+        f"/api/v1/{test_client.test_tenant}/store",
+        json={
+            "content": "Sparkle stole pizza from the counter",
+            "tags": ["sparkle", "theft", "pizza"],
+        },
+    )
     assert response1.status_code == 200
     data1 = response1.json()
 
@@ -31,10 +35,13 @@ async def test_store_memory_with_splash(test_client, mock_ollama_response):
     assert data1["splash"] == []  # First memory has no splash
 
     # Store second memory about Sparkle
-    response2 = await test_client.post(f"/api/v1/{test_client.test_tenant}/store", json={
-        "content": "Sparkle stole bacon this morning",
-        "tags": ["sparkle", "theft", "bacon"]
-    })
+    response2 = await test_client.post(
+        f"/api/v1/{test_client.test_tenant}/store",
+        json={
+            "content": "Sparkle stole bacon this morning",
+            "tags": ["sparkle", "theft", "bacon"],
+        },
+    )
     assert response2.status_code == 200
     data2 = response2.json()
 
@@ -95,25 +102,30 @@ async def test_tenant_isolation(test_db, mock_ollama_response):
         # Now test with the API
         async with AsyncClient(
             base_url=f"http://test:{settings.port}",
-            headers={"X-API-Key": settings.api_key or "test-key"}
+            headers={"X-API-Key": settings.api_key or "test-key"},
         ) as client:
             # Store memory for Claude
-            await client.post("/api/v1/claude/store", json={
-                "content": "Claude's private thought about Python",
-                "tags": ["python", "private"]
-            })
+            await client.post(
+                "/api/v1/claude/store",
+                json={
+                    "content": "Claude's private thought about Python",
+                    "tags": ["python", "private"],
+                },
+            )
 
             # Store memory for Alpha
-            await client.post("/api/v1/alpha/store", json={
-                "content": "Alpha's private thought about JavaScript",
-                "tags": ["javascript", "private"]
-            })
+            await client.post(
+                "/api/v1/alpha/store",
+                json={
+                    "content": "Alpha's private thought about JavaScript",
+                    "tags": ["javascript", "private"],
+                },
+            )
 
             # Search Claude's memories
-            claude_response = await client.post("/api/v1/claude/search", json={
-                "query": "private thought",
-                "limit": 10
-            })
+            claude_response = await client.post(
+                "/api/v1/claude/search", json={"query": "private thought", "limit": 10}
+            )
             claude_data = claude_response.json()
             assert "memories" in claude_data
             claude_memories = claude_data["memories"]
@@ -124,10 +136,9 @@ async def test_tenant_isolation(test_db, mock_ollama_response):
             assert "JavaScript" not in claude_memories[0]["content"]
 
             # Search Alpha's memories
-            alpha_response = await client.post("/api/v1/alpha/search", json={
-                "query": "private thought",
-                "limit": 10
-            })
+            alpha_response = await client.post(
+                "/api/v1/alpha/search", json={"query": "private thought", "limit": 10}
+            )
             alpha_data = alpha_response.json()
             assert "memories" in alpha_data
             alpha_memories = alpha_data["memories"]
@@ -145,19 +156,21 @@ async def test_tenant_isolation(test_db, mock_ollama_response):
 
 
 @pytest.mark.asyncio
-async def test_memory_init_returns_recent_and_context(test_client, mock_ollama_response):
+async def test_memory_init_returns_recent_and_context(
+    test_client, mock_ollama_response
+):
     """Test that init returns personality context and recent memories."""
     # Store some memories first
     memories = [
         "User prefers uv over pip for Python",
         "Sparkle is a criminal mastermind cat",
-        "We debugged a semicolon for 2 hours"
+        "We debugged a semicolon for 2 hours",
     ]
 
     for memory in memories:
-        await test_client.post(f"/api/v1/{test_client.test_tenant}/store", json={
-            "content": memory
-        })
+        await test_client.post(
+            f"/api/v1/{test_client.test_tenant}/store", json={"content": memory}
+        )
 
     # Call init
     response = await test_client.post(f"/api/v1/{test_client.test_tenant}/init")
@@ -169,7 +182,8 @@ async def test_memory_init_returns_recent_and_context(test_client, mock_ollama_r
 
     # Check timestamp format
     from datetime import datetime
-    datetime.fromisoformat(data["current_time"].replace('Z', '+00:00'))
+
+    datetime.fromisoformat(data["current_time"].replace("Z", "+00:00"))
 
     # Should have our recent memories
     assert len(data["recent_memories"]) > 0
@@ -191,21 +205,24 @@ async def test_memory_init_returns_recent_and_context(test_client, mock_ollama_r
 async def test_search_by_semantic_similarity(test_client, mock_ollama_response):
     """Test semantic search finds related memories."""
     # Store memories about different topics
-    await test_client.post(f"/api/v1/{test_client.test_tenant}/store", json={
-        "content": "Sparkle the cat stole pizza again"
-    })
-    await test_client.post(f"/api/v1/{test_client.test_tenant}/store", json={
-        "content": "Python debugging is frustrating"
-    })
-    await test_client.post(f"/api/v1/{test_client.test_tenant}/store", json={
-        "content": "My cat Sparkle's criminal activities continue"
-    })
+    await test_client.post(
+        f"/api/v1/{test_client.test_tenant}/store",
+        json={"content": "Sparkle the cat stole pizza again"},
+    )
+    await test_client.post(
+        f"/api/v1/{test_client.test_tenant}/store",
+        json={"content": "Python debugging is frustrating"},
+    )
+    await test_client.post(
+        f"/api/v1/{test_client.test_tenant}/store",
+        json={"content": "My cat Sparkle's criminal activities continue"},
+    )
 
     # Search for cat-related memories
-    response = await test_client.post(f"/api/v1/{test_client.test_tenant}/search", json={
-        "query": "feline mischief",
-        "limit": 10
-    })
+    response = await test_client.post(
+        f"/api/v1/{test_client.test_tenant}/search",
+        json={"query": "feline mischief", "limit": 10},
+    )
 
     data = response.json()
     assert "memories" in data
@@ -233,15 +250,15 @@ async def test_search_by_semantic_similarity(test_client, mock_ollama_response):
 async def test_get_recent_memories(test_client, mock_ollama_response):
     """Test retrieving recent memories within time window."""
     # Store a memory
-    await test_client.post(f"/api/v1/{test_client.test_tenant}/store", json={
-        "content": "Just stored this memory"
-    })
+    await test_client.post(
+        f"/api/v1/{test_client.test_tenant}/store",
+        json={"content": "Just stored this memory"},
+    )
 
     # Get recent memories
-    response = await test_client.post(f"/api/v1/{test_client.test_tenant}/recent", json={
-        "hours": 1,
-        "limit": 10
-    })
+    response = await test_client.post(
+        f"/api/v1/{test_client.test_tenant}/recent", json={"hours": 1, "limit": 10}
+    )
 
     assert response.status_code == 200
     data = response.json()
@@ -269,14 +286,15 @@ async def test_splash_similarity_threshold(test_client, mock_ollama_response):
 
     # Store multiple memories
     for i in range(5):
-        await test_client.post(f"/api/v1/{test_client.test_tenant}/store", json={
-            "content": f"Memory number {i}"
-        })
+        await test_client.post(
+            f"/api/v1/{test_client.test_tenant}/store",
+            json={"content": f"Memory number {i}"},
+        )
 
     # Store one more and check splash
-    response = await test_client.post(f"/api/v1/{test_client.test_tenant}/store", json={
-        "content": "Final memory"
-    })
+    response = await test_client.post(
+        f"/api/v1/{test_client.test_tenant}/store", json={"content": "Final memory"}
+    )
 
     splash = response.json()["splash"]
     # Should have at most 3 memories (as defined in our design)
@@ -292,10 +310,13 @@ async def test_splash_similarity_threshold(test_client, mock_ollama_response):
 @pytest.mark.asyncio
 async def test_auto_tagging_and_entity_extraction(test_client, mock_ollama_response):
     """Test that memories are auto-tagged and entities are extracted."""
-    response = await test_client.post(f"/api/v1/{test_client.test_tenant}/store", json={
-        "content": "Sparkle the cat loves stealing pizza from the counter",
-        "tags": ["manual-tag"]
-    })
+    response = await test_client.post(
+        f"/api/v1/{test_client.test_tenant}/store",
+        json={
+            "content": "Sparkle the cat loves stealing pizza from the counter",
+            "tags": ["manual-tag"],
+        },
+    )
 
     assert response.status_code == 200
     data = response.json()
@@ -322,21 +343,21 @@ async def test_auto_tagging_and_entity_extraction(test_client, mock_ollama_respo
 async def test_memory_validation(test_client, mock_ollama_response):
     """Test content validation rules."""
     # Test empty content
-    response = await test_client.post(f"/api/v1/{test_client.test_tenant}/store", json={
-        "content": ""
-    })
+    response = await test_client.post(
+        f"/api/v1/{test_client.test_tenant}/store", json={"content": ""}
+    )
     assert response.status_code == 400
     assert "error" in response.json()
 
     # Test whitespace-only content
-    response = await test_client.post(f"/api/v1/{test_client.test_tenant}/store", json={
-        "content": "   \n\t   "
-    })
+    response = await test_client.post(
+        f"/api/v1/{test_client.test_tenant}/store", json={"content": "   \n\t   "}
+    )
     assert response.status_code == 400
 
     # Test content too long (over 7500 chars)
     long_content = "x" * 7501
-    response = await test_client.post(f"/api/v1/{test_client.test_tenant}/store", json={
-        "content": long_content
-    })
+    response = await test_client.post(
+        f"/api/v1/{test_client.test_tenant}/store", json={"content": long_content}
+    )
     assert response.status_code == 400

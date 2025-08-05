@@ -1,4 +1,5 @@
 """Memory repository for database operations."""
+
 from __future__ import annotations
 
 import json
@@ -8,6 +9,11 @@ import numpy as np
 from pendulum import DateTime
 
 from pond.infrastructure.database import DatabasePool
+from pond.services.embeddings import (
+    EmbeddingNotConfigured,
+    EmbeddingProvider,
+    get_embedding_provider,
+)
 
 from .entities import Action, Entity
 from .memory import Memory
@@ -18,21 +24,47 @@ logger = logging.getLogger(__name__)
 class MemoryRepository:
     """Repository for storing and retrieving memories."""
 
-    def __init__(self, db_pool: DatabasePool, tenant: str):
+    def __init__(
+        self,
+        db_pool: DatabasePool,
+        tenant: str,
+        embedding_provider: EmbeddingProvider | None = None,
+    ):
         """Initialize with database pool and tenant name."""
         self.db_pool = db_pool
         self.tenant = tenant
         self._nlp = None
+        self._embedding_provider = embedding_provider
+        self._provider_error = None
+
+        # Try to get provider if not explicitly provided
+        if self._embedding_provider is None:
+            try:
+                self._embedding_provider = get_embedding_provider()
+            except EmbeddingNotConfigured as e:
+                # Store the error to raise later when embeddings are actually needed
+                self._provider_error = e
+                logger.critical(f"Embedding provider not configured: {e}")
 
     @property
     def nlp(self):
         """Lazy load spaCy model for entity/action extraction."""
         if self._nlp is None:
             import spacy
+
             self._nlp = spacy.load("en_core_web_lg")
         return self._nlp
 
-    async def store(self, content: str, user_tags: list[str]) -> tuple[Memory, list[Memory]]:
+    @property
+    def embedding_provider(self) -> EmbeddingProvider:
+        """Get the embedding provider, raising error if not configured."""
+        if self._provider_error:
+            raise self._provider_error
+        return self._embedding_provider
+
+    async def store(
+        self, content: str, user_tags: list[str]
+    ) -> tuple[Memory, list[Memory]]:
         """Store a memory and return it with splash memories.
 
         Returns:
@@ -93,9 +125,11 @@ class MemoryRepository:
                     break
 
                 # Be conservative - skip pronouns, single stopwords, very short chunks
-                if (chunk.root.pos_ == "PRON" or
-                    (len(chunk) == 1 and chunk.root.is_stop) or
-                    len(chunk.text) < 3):
+                if (
+                    chunk.root.pos_ == "PRON"
+                    or (len(chunk) == 1 and chunk.root.is_stop)
+                    or len(chunk.text) < 3
+                ):
                     continue
 
                 # Skip if already in auto_tags or would duplicate user tag
@@ -109,11 +143,13 @@ class MemoryRepository:
                     break
 
                 # Only proper nouns or nouns that aren't stop words
-                if (token.pos_ in ["PROPN", "NOUN"] and
-                    not token.is_stop and
-                    len(token.text) > 2 and
-                    token.text not in auto_tags and
-                    token.text not in existing_tags):
+                if (
+                    token.pos_ in ["PROPN", "NOUN"]
+                    and not token.is_stop
+                    and len(token.text) > 2
+                    and token.text not in auto_tags
+                    and token.text not in existing_tags
+                ):
                     auto_tags.append(token.text)
 
         # Add the auto-tags to the memory
@@ -121,20 +157,23 @@ class MemoryRepository:
             memory.add_tags(*auto_tags)
 
     async def _get_embedding(self, content: str) -> np.ndarray:
-        """Get embedding from Ollama."""
-        # TODO: Implement actual Ollama call
-        return np.random.rand(768)  # Placeholder
+        """Get embedding from configured provider."""
+        return await self.embedding_provider.embed(content)
 
     async def _store_in_db(self, memory: Memory) -> int:
         """Store memory in database, return ID."""
         async with self.db_pool.acquire_tenant(self.tenant) as conn:
             # Convert numpy array to list for storage
-            embedding_list = memory.embedding.tolist() if memory.embedding is not None else None
+            embedding_list = (
+                memory.embedding.tolist() if memory.embedding is not None else None
+            )
 
             # Prepare metadata for JSON serialization
             # Convert sets to lists since sets aren't JSON serializable
             metadata_for_storage = memory.metadata.copy()
-            if "tags" in metadata_for_storage and isinstance(metadata_for_storage["tags"], set):
+            if "tags" in metadata_for_storage and isinstance(
+                metadata_for_storage["tags"], set
+            ):
                 metadata_for_storage["tags"] = sorted(metadata_for_storage["tags"])
 
             # Store and get the generated ID
@@ -146,13 +185,13 @@ class MemoryRepository:
                 """,
                 memory.content,
                 embedding_list,
-                json.dumps(metadata_for_storage)  # Convert dict to JSON string
+                json.dumps(metadata_for_storage),  # Convert dict to JSON string
             )
-            return row['id']
+            return row["id"]
 
     async def _get_splash(self, memory: Memory) -> list[Memory]:
         """Get memories in the similarity sweet spot (0.7-0.9).
-        
+
         Returns up to 3 memories with similarity between 0.7 and 0.9.
         Empty list is valid if no memories fall in this range.
         """
@@ -166,7 +205,7 @@ class MemoryRepository:
             # distance > 0.1 means similarity < 0.9
             rows = await conn.fetch(
                 """
-                SELECT id, content, embedding, metadata, 
+                SELECT id, content, embedding, metadata,
                        1 - (embedding <=> $1) as similarity
                 FROM memories
                 WHERE NOT forgotten
@@ -176,7 +215,7 @@ class MemoryRepository:
                 ORDER BY embedding <=> $1
                 LIMIT 3
                 """,
-                memory.embedding.tolist()
+                memory.embedding.tolist(),
             )
 
             return [self._row_to_memory(row) for row in rows]
@@ -198,7 +237,7 @@ class MemoryRepository:
                 LIMIT $2
                 """,
                 query_embedding.tolist(),
-                limit
+                limit,
             )
 
             return [self._row_to_memory(row) for row in rows]
@@ -216,7 +255,7 @@ class MemoryRepository:
                 LIMIT $2
                 """,
                 since,  # asyncpg handles datetime serialization
-                limit
+                limit,
             )
 
             return [self._row_to_memory(row) for row in rows]
@@ -225,11 +264,11 @@ class MemoryRepository:
         """Convert a database row to a Memory object."""
         # Convert embedding back to numpy array if present
         embedding = None
-        if row['embedding'] is not None:
-            embedding = np.array(row['embedding'])
+        if row["embedding"] is not None:
+            embedding = np.array(row["embedding"])
 
         # Convert metadata, restoring sets from lists
-        metadata = row['metadata']
+        metadata = row["metadata"]
         # Handle case where metadata might be a string (from manual inserts)
         if isinstance(metadata, str):
             metadata = json.loads(metadata)
@@ -242,10 +281,7 @@ class MemoryRepository:
 
         # Create memory with data from database
         memory = Memory(
-            id=row['id'],
-            content=row['content'],
-            embedding=embedding,
-            metadata=metadata
+            id=row["id"], content=row["content"], embedding=embedding, metadata=metadata
         )
 
         return memory

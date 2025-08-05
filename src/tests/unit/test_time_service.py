@@ -1,6 +1,7 @@
 """
 Unit tests for the time service.
 """
+
 import os
 from datetime import datetime, timedelta
 from unittest.mock import MagicMock, patch
@@ -52,8 +53,13 @@ class TestTimeServiceFormatting:
         now = datetime(2025, 8, 4, 14, 3, 0, tzinfo=ZoneInfo("UTC"))
 
         # Seconds ago
-        assert service.format_age(now - timedelta(seconds=30), now) == "30 seconds before"
-        assert service.format_age(now - timedelta(seconds=1), now) == "a few seconds before"
+        assert (
+            service.format_age(now - timedelta(seconds=30), now) == "30 seconds before"
+        )
+        assert (
+            service.format_age(now - timedelta(seconds=1), now)
+            == "a few seconds before"
+        )
 
         # Minutes ago
         assert service.format_age(now - timedelta(minutes=5), now) == "5 minutes before"
@@ -70,7 +76,9 @@ class TestTimeServiceFormatting:
 
         # Future times
         assert service.format_age(now + timedelta(hours=1), now) == "1 hour after"
-        assert service.format_age(now + timedelta(minutes=30), now) == "30 minutes after"
+        assert (
+            service.format_age(now + timedelta(minutes=30), now) == "30 minutes after"
+        )
 
     def test_format_handles_dst_changes(self):
         """Test formatting handles daylight saving time."""
@@ -102,26 +110,26 @@ class TestTimeServiceFormatting:
 class TestTimeServiceParsing:
     """Test parsing human-friendly time intervals."""
 
-    @pytest.mark.parametrize("interval,expected", [
-        # Hours
-        ("1 hour", timedelta(hours=1)),
-        ("6 hours", timedelta(hours=6)),
-        ("24 hours", timedelta(hours=24)),
-
-        # Days
-        ("yesterday", timedelta(days=1)),
-        ("1 day", timedelta(days=1)),
-        ("3 days", timedelta(days=3)),
-        ("last week", timedelta(weeks=1)),
-
-        # Minutes
-        ("30 minutes", timedelta(minutes=30)),
-        ("5 mins", timedelta(minutes=5)),
-
-        # Case insensitive
-        ("Last Week", timedelta(weeks=1)),
-        ("YESTERDAY", timedelta(days=1)),
-    ])
+    @pytest.mark.parametrize(
+        "interval,expected",
+        [
+            # Hours
+            ("1 hour", timedelta(hours=1)),
+            ("6 hours", timedelta(hours=6)),
+            ("24 hours", timedelta(hours=24)),
+            # Days
+            ("yesterday", timedelta(days=1)),
+            ("1 day", timedelta(days=1)),
+            ("3 days", timedelta(days=3)),
+            ("last week", timedelta(weeks=1)),
+            # Minutes
+            ("30 minutes", timedelta(minutes=30)),
+            ("5 mins", timedelta(minutes=5)),
+            # Case insensitive
+            ("Last Week", timedelta(weeks=1)),
+            ("YESTERDAY", timedelta(days=1)),
+        ],
+    )
     def test_parse_interval_common_formats(self, interval, expected):
         """Test parsing common interval formats."""
         service = TimeService()
@@ -136,17 +144,18 @@ class TestTimeServiceParsing:
 
         assert "invalid interval" in str(exc.value).lower()
 
-    @pytest.mark.parametrize("dt_str,expected_hour", [
-        # ISO format
-        ("2024-08-03T20:15:00Z", 20),
-        ("2024-08-03 20:15:00", 20),
-
-        # With UTC offset
-        ("2024-08-03T13:15:00-07:00", 13),
-
-        # Just date (assumes midnight)
-        ("2024-08-03", 0),
-    ])
+    @pytest.mark.parametrize(
+        "dt_str,expected_hour",
+        [
+            # ISO format
+            ("2024-08-03T20:15:00Z", 20),
+            ("2024-08-03 20:15:00", 20),
+            # With UTC offset
+            ("2024-08-03T13:15:00-07:00", 13),
+            # Just date (assumes midnight)
+            ("2024-08-03", 0),
+        ],
+    )
     def test_parse_datetime_formats(self, dt_str, expected_hour):
         """Test parsing various datetime formats."""
         service = TimeService()
@@ -175,9 +184,7 @@ class TestTimeServiceTimezoneDetection:
     def test_timezone_from_geoip(self):
         """Test timezone detection from Geo-IP."""
         mock_response = MagicMock()
-        mock_response.json.return_value = {
-            "timezone": "America/Chicago"
-        }
+        mock_response.json.return_value = {"timezone": "America/Chicago"}
         mock_response.raise_for_status = MagicMock()
 
         with patch("pond.utils.time_service.httpx.get", return_value=mock_response):
@@ -187,7 +194,9 @@ class TestTimeServiceTimezoneDetection:
 
     def test_geoip_fallback_on_error(self):
         """Test fallback when Geo-IP fails."""
-        with patch("pond.utils.time_service.httpx.get", side_effect=Exception("Network error")):
+        with patch(
+            "pond.utils.time_service.httpx.get", side_effect=Exception("Network error")
+        ):
             service = TimeService(geoip_url="https://ipapi.co/json/")
             detected = service._geoip_timezone()
             assert detected is None

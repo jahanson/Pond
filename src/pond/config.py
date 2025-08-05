@@ -1,5 +1,6 @@
 """Configuration management for Pond."""
 
+from pydantic import field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -30,7 +31,11 @@ class Settings(BaseSettings):
 
     # External services
     ollama_url: str = "http://localhost:11434"
-    embedding_timeout: int = 60
+
+    # Embedding configuration
+    embedding_provider: str | None = None  # None = unconfigured
+    ollama_embedding_model: str | None = None
+    ollama_embedding_timeout: int = 60
 
     # Logging
     log_level: str = "INFO"
@@ -40,17 +45,71 @@ class Settings(BaseSettings):
     pond_timezone: str | None = None
     geoip_url: str | None = "https://ipapi.co/json/"
 
+    @field_validator("embedding_provider")
+    @classmethod
+    def validate_embedding_provider(cls, v: str | None) -> str | None:
+        """Validate embedding provider is one of the supported options."""
+        if v is None:
+            return None
+
+        valid_providers = {"ollama", "mock"}
+        if v.lower() not in valid_providers:
+            raise ValueError(
+                f"Invalid EMBEDDING_PROVIDER: '{v}'. "
+                f"Must be one of: {', '.join(valid_providers)}"
+            )
+        return v.lower()
+
+    @model_validator(mode="after")
+    def validate_provider_config(self) -> "Settings":
+        """Validate provider-specific configuration."""
+        if self.embedding_provider == "ollama":
+            if not self.ollama_embedding_model:
+                raise ValueError(
+                    "OLLAMA_EMBEDDING_MODEL is required when EMBEDDING_PROVIDER=ollama. "
+                    "Example: OLLAMA_EMBEDDING_MODEL=nomic-embed-text"
+                )
+            # ollama_url has a default, so it's always set
+            # ollama_embedding_timeout has a default too
+        return self
+
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         # Parse database URL if individual components not provided
-        if not any([self.db_host, self.db_port, self.db_user, self.db_password, self.db_name]):
+        if not any(
+            [self.db_host, self.db_port, self.db_user, self.db_password, self.db_name]
+        ):
             from urllib.parse import urlparse
+
             parsed = urlparse(self.database_url)
             self.db_host = self.db_host or parsed.hostname
             self.db_port = self.db_port or parsed.port
             self.db_user = self.db_user or parsed.username
             self.db_password = self.db_password or parsed.password
-            self.db_name = self.db_name or parsed.path.lstrip('/')
+            self.db_name = self.db_name or parsed.path.lstrip("/")
 
 
-settings = Settings()
+# Lazy settings initialization
+_settings = None
+
+
+def get_settings() -> Settings:
+    """Get the settings instance, creating it if needed."""
+    global _settings
+    if _settings is None:
+        _settings = Settings()
+    return _settings
+
+
+# This will be accessed as a property
+class SettingsProxy:
+    """Proxy to provide attribute access to settings."""
+
+    def __getattr__(self, name):
+        return getattr(get_settings(), name)
+
+    def __setattr__(self, name, value):
+        setattr(get_settings(), name, value)
+
+
+settings = SettingsProxy()

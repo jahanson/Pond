@@ -1,6 +1,7 @@
 """
 Tests for API authentication.
 """
+
 import pytest
 from httpx import AsyncClient
 
@@ -48,9 +49,7 @@ async def test_valid_api_key_accepted(test_client, mock_ollama_response):
 async def test_wrong_api_key_rejected(test_db: str):
     """Test that wrong API key is rejected."""
     async with AsyncClient(
-        app=app,
-        base_url="http://test",
-        headers={"X-API-Key": "wrong-key"}
+        app=app, base_url="http://test", headers={"X-API-Key": "wrong-key"}
     ) as client:
         response = await client.post("/api/v1/claude/init")
         assert response.status_code == 401

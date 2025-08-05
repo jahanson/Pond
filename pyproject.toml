@@ -19,6 +19,8 @@ dependencies = [
     "inflect>=7.0.0", # For tag normalization
     "pendulum>=3.0.0", # For datetime parsing and formatting
     "pytimeparse>=1.1.8",
+    "aiohttp>=3.11.0", # For Ollama HTTP client
+    "structlog>=25.4.0",
 ]
 
 [project.scripts]

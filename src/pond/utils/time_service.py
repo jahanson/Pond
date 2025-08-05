@@ -1,4 +1,5 @@
 """Time service for timezone-aware datetime handling using Pendulum."""
+
 import os
 from datetime import datetime
 
@@ -92,7 +93,9 @@ class TimeService:
 
         return f"{time_str} {period[0]}.m. {tz_abbr}"
 
-    def format_age(self, dt: datetime | DateTime, now: datetime | DateTime | None = None) -> str:
+    def format_age(
+        self, dt: datetime | DateTime, now: datetime | DateTime | None = None
+    ) -> str:
         """Format as relative time like '5 minutes ago' or 'in 1 hour'."""
         if not isinstance(dt, DateTime):
             dt = pendulum.instance(dt)
@@ -105,7 +108,9 @@ class TimeService:
         # Use Pendulum's built-in diff_for_humans() method
         return dt.diff_for_humans(now)
 
-    def format_relative(self, dt: datetime | DateTime, now: datetime | DateTime | None = None) -> str:
+    def format_relative(
+        self, dt: datetime | DateTime, now: datetime | DateTime | None = None
+    ) -> str:
         """Alias for format_age for more intuitive naming."""
         return self.format_age(dt, now)
 
@@ -171,5 +176,3 @@ class TimeService:
             return data.get("timezone")
         except Exception:
             return None
-
-

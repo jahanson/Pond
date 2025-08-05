@@ -1,4 +1,5 @@
 """Tests for feature extraction in MemoryRepository."""
+
 import pytest
 
 from pond.domain import Memory, MemoryRepository
@@ -35,8 +36,8 @@ class TestFeatureExtraction:
 
         # Should extract lemmatized verbs (not auxiliaries)
         assert "steal" in lemmas  # stole -> steal
-        assert "run" in lemmas    # ran -> run
-        assert len(lemmas) == 2   # No auxiliaries or stop words
+        assert "run" in lemmas  # ran -> run
+        assert len(lemmas) == 2  # No auxiliaries or stop words
 
     def test_extract_actions_filters_helpers(self, repository):
         """Test that helper verbs are extracted but can be identified."""
@@ -94,7 +95,9 @@ class TestFeatureExtraction:
 
     def test_auto_tags_from_noun_chunks(self, repository):
         """Test auto-tag generation from noun chunks."""
-        memory = Memory(content="The machine learning model improved customer satisfaction scores significantly.")
+        memory = Memory(
+            content="The machine learning model improved customer satisfaction scores significantly."
+        )
         repository._extract_features(memory)
 
         tags = set(memory.get_tags())
@@ -139,7 +142,9 @@ class TestFeatureExtraction:
 
     def test_code_snippet_extraction(self, repository):
         """Test extraction from content with code."""
-        memory = Memory(content="Fixed the bug in user.save() method by adding validation.")
+        memory = Memory(
+            content="Fixed the bug in user.save() method by adding validation."
+        )
         repository._extract_features(memory)
 
         actions = memory.get_actions()

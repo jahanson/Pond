@@ -1,4 +1,5 @@
 """Database fixtures for testing."""
+
 import uuid
 from collections.abc import AsyncGenerator
 
@@ -12,13 +13,13 @@ from pond.infrastructure.database import DatabasePool
 @pytest_asyncio.fixture
 async def test_db_pool() -> AsyncGenerator[DatabasePool, None]:
     """Create a database pool connected to the test database.
-    
+
     Uses pond_test database which should already exist.
     Each test gets isolated via unique tenant schemas.
     """
     # Override the database URL to use test database
     original_url = settings.database_url
-    settings.database_url = settings.database_url.replace('/pond', '/pond_test')
+    settings.database_url = settings.database_url.replace("/pond", "/pond_test")
 
     pool = DatabasePool()
     await pool.initialize()
@@ -33,7 +34,7 @@ async def test_db_pool() -> AsyncGenerator[DatabasePool, None]:
 @pytest_asyncio.fixture
 async def test_tenant(test_db_pool: DatabasePool) -> AsyncGenerator[str, None]:
     """Create a unique tenant schema for test isolation.
-    
+
     Automatically cleaned up after test.
     """
     # Generate unique tenant name
@@ -42,6 +43,7 @@ async def test_tenant(test_db_pool: DatabasePool) -> AsyncGenerator[str, None]:
     # Create the schema
     async with test_db_pool.acquire() as conn:
         from pond.infrastructure.schema import ensure_tenant_schema
+
         await ensure_tenant_schema(conn, tenant)
 
     yield tenant
@@ -54,7 +56,7 @@ async def test_tenant(test_db_pool: DatabasePool) -> AsyncGenerator[str, None]:
 @pytest_asyncio.fixture
 async def ensure_test_database():
     """Ensure pond_test database exists with pgvector extension.
-    
+
     This runs once per test session.
     """
     # Connect to postgres database to create test database

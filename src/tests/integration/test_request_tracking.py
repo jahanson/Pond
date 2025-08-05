@@ -1,6 +1,7 @@
 """
 Tests for request ID tracking and comprehensive health checks.
 """
+
 import re
 
 import pytest
@@ -12,7 +13,11 @@ async def test_request_id_header_present(test_client, mock_ollama_response):
     # Test various endpoints
     endpoints = [
         ("POST", f"/api/v1/{test_client.test_tenant}/init", {}),
-        ("POST", f"/api/v1/{test_client.test_tenant}/store", {"content": "Test memory"}),
+        (
+            "POST",
+            f"/api/v1/{test_client.test_tenant}/store",
+            {"content": "Test memory"},
+        ),
         ("POST", f"/api/v1/{test_client.test_tenant}/search", {"query": "test"}),
         ("POST", f"/api/v1/{test_client.test_tenant}/recent", {"hours": 1}),
         ("GET", "/api/v1/health", None),
@@ -31,7 +36,7 @@ async def test_request_id_header_present(test_client, mock_ollama_response):
         # Should be a valid UUID-like format
         assert len(request_id) > 0
         # Basic format check (not strict UUID validation)
-        assert re.match(r'^[a-f0-9\-]+$', request_id.lower())
+        assert re.match(r"^[a-f0-9\-]+$", request_id.lower())
 
 
 @pytest.mark.asyncio
@@ -40,9 +45,9 @@ async def test_request_id_unique(test_client, mock_ollama_response):
     # Make multiple requests
     request_ids = []
     for _ in range(5):
-        response = await test_client.post(f"/api/v1/{test_client.test_tenant}/store", json={
-            "content": "Test memory"
-        })
+        response = await test_client.post(
+            f"/api/v1/{test_client.test_tenant}/store", json={"content": "Test memory"}
+        )
         request_ids.append(response.headers["X-Request-ID"])
 
     # All IDs should be unique

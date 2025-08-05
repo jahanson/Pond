@@ -1,10 +1,12 @@
 """Entity and Action domain models."""
+
 from dataclasses import dataclass
 
 
 @dataclass
 class Entity:
     """An entity extracted from text."""
+
     text: str
     type: str  # PERSON, ORG, LOC, etc.
 
@@ -33,6 +35,7 @@ class Entity:
 @dataclass
 class Action:
     """An action (verb) extracted from text."""
+
     lemma: str
 
     def is_past_tense_marker(self) -> bool:

@@ -1,4 +1,5 @@
 """Integration tests for database infrastructure."""
+
 import asyncio
 
 import pytest
@@ -7,7 +8,7 @@ from pond.infrastructure.database import DatabasePool
 from pond.infrastructure.schema import ensure_tenant_schema, list_tenants, tenant_exists
 
 # Import fixtures
-from tests.fixtures.database import test_db_pool, test_tenant, ensure_test_database
+from tests.fixtures.database import ensure_test_database, test_db_pool  # noqa: F401
 
 # Run this once per session to ensure test database exists
 pytestmark = pytest.mark.usefixtures("ensure_test_database")
@@ -44,22 +45,22 @@ async def test_tenant_schema_creation(test_db_pool):
 
             # Check tables were created
             tables = await conn.fetch("""
-                SELECT tablename 
-                FROM pg_tables 
+                SELECT tablename
+                FROM pg_tables
                 WHERE schemaname = 'test_tenant_123'
             """)
-            table_names = [t['tablename'] for t in tables]
-            assert 'memories' in table_names
+            table_names = [t["tablename"] for t in tables]
+            assert "memories" in table_names
 
             # Check indexes were created
             indexes = await conn.fetch("""
-                SELECT indexname 
-                FROM pg_indexes 
+                SELECT indexname
+                FROM pg_indexes
                 WHERE schemaname = 'test_tenant_123'
             """)
-            index_names = [i['indexname'] for i in indexes]
-            assert 'idx_memories_embedding' in index_names
-            assert 'idx_memories_forgotten' in index_names
+            index_names = [i["indexname"] for i in indexes]
+            assert "idx_memories_embedding" in index_names
+            assert "idx_memories_forgotten" in index_names
 
     finally:
         # Cleanup
@@ -82,14 +83,14 @@ async def test_tenant_isolation(test_db_pool):
         # Insert data in tenant_a
         async with pool.acquire_tenant("tenant_a") as conn:
             await conn.execute("""
-                INSERT INTO memories (content, metadata) 
+                INSERT INTO memories (content, metadata)
                 VALUES ('Memory in tenant A', '{"test": true}')
             """)
 
         # Insert data in tenant_b
         async with pool.acquire_tenant("tenant_b") as conn:
             await conn.execute("""
-                INSERT INTO memories (content, metadata) 
+                INSERT INTO memories (content, metadata)
                 VALUES ('Memory in tenant B', '{"test": true}')
             """)
 
@@ -97,13 +98,13 @@ async def test_tenant_isolation(test_db_pool):
         async with pool.acquire_tenant("tenant_a") as conn:
             memories = await conn.fetch("SELECT content FROM memories")
             assert len(memories) == 1
-            assert memories[0]['content'] == 'Memory in tenant A'
+            assert memories[0]["content"] == "Memory in tenant A"
 
         # tenant_b should only see its memory
         async with pool.acquire_tenant("tenant_b") as conn:
             memories = await conn.fetch("SELECT content FROM memories")
             assert len(memories) == 1
-            assert memories[0]['content'] == 'Memory in tenant B'
+            assert memories[0]["content"] == "Memory in tenant B"
 
     finally:
         # Cleanup
@@ -154,12 +155,12 @@ async def test_invalid_tenant_name(test_db_pool):
 
     # Try SQL injection attempts
     with pytest.raises(ValueError, match="Invalid tenant name"):
-        async with pool.acquire_tenant("tenant'; DROP TABLE memories; --") as conn:
+        async with pool.acquire_tenant("tenant'; DROP TABLE memories; --"):
             pass
 
     # Try special characters
     with pytest.raises(ValueError, match="Invalid tenant name"):
-        async with pool.acquire_tenant("tenant-name") as conn:
+        async with pool.acquire_tenant("tenant-name"):
             pass
 
 
@@ -175,7 +176,7 @@ async def test_connection_pool_exhaustion():
     original_max = settings.db_pool_max_size
 
     # Override for test with pond_test database
-    settings.database_url = settings.database_url.replace('/pond', '/pond_test')
+    settings.database_url = settings.database_url.replace("/pond", "/pond_test")
     settings.db_pool_min_size = 1
     settings.db_pool_max_size = 2  # Very small pool
 
@@ -192,7 +193,7 @@ async def test_connection_pool_exhaustion():
         with pytest.raises(asyncio.TimeoutError):
             await asyncio.wait_for(
                 pool.pool.acquire(),
-                timeout=1.0  # Short timeout for test
+                timeout=1.0,  # Short timeout for test
             )
 
         # Release connections

@@ -5,6 +5,7 @@ Only testing the operations that:
 2. Could realistically regress
 3. We control (not external services)
 """
+
 import time
 
 import pytest
@@ -27,8 +28,10 @@ class TestCriticalPathPerformance:
     def test_feature_extraction_performance(self, warmed_repository):
         """Feature extraction should be fast for typical content."""
         # Typical memory content length
-        content = "Just learned that Python's walrus operator := can simplify list comprehensions. " \
-                 "Really useful for avoiding duplicate computations in filtering and mapping operations."
+        content = (
+            "Just learned that Python's walrus operator := can simplify list comprehensions. "
+            "Really useful for avoiding duplicate computations in filtering and mapping operations."
+        )
 
         memory = Memory(content=content)
 
@@ -37,7 +40,7 @@ class TestCriticalPathPerformance:
         duration = time.perf_counter() - start
 
         # Generous but will catch major regressions
-        assert duration < 0.1, f"Feature extraction took {duration*1000:.1f}ms"
+        assert duration < 0.1, f"Feature extraction took {duration * 1000:.1f}ms"
 
     def test_tag_normalization_performance(self):
         """Tag normalization should be fast even for complex tags."""
@@ -56,7 +59,7 @@ class TestCriticalPathPerformance:
         duration = time.perf_counter() - start
 
         # Should normalize 4 tags in under 100ms total
-        assert duration < 0.1, f"Tag normalization took {duration*1000:.1f}ms"
+        assert duration < 0.1, f"Tag normalization took {duration * 1000:.1f}ms"
 
     def test_memory_validation_performance(self):
         """Memory validation should be essentially instant."""
@@ -68,7 +71,7 @@ class TestCriticalPathPerformance:
         duration = time.perf_counter() - start
 
         # Validation should be microseconds, not milliseconds
-        assert duration < 0.001, f"Memory validation took {duration*1000:.1f}ms"
+        assert duration < 0.001, f"Memory validation took {duration * 1000:.1f}ms"
 
 
 # Optional: Mark slow tests so they can be skipped during rapid development

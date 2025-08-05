@@ -1,6 +1,7 @@
 """
 Shared test fixtures for Pond.
 """
+
 import asyncio
 import uuid
 from collections.abc import AsyncGenerator
@@ -12,6 +13,16 @@ from httpx import AsyncClient
 
 from pond.api.main import app
 from pond.config import settings
+
+
+def pytest_addoption(parser):
+    """Add custom command line options."""
+    parser.addoption(
+        "--run-ollama",
+        action="store_true",
+        default=False,
+        help="Run tests that require Ollama to be running",
+    )
 
 
 @pytest.fixture(scope="session")
@@ -59,7 +70,7 @@ async def test_db() -> AsyncGenerator[str, None]:
 
         try:
             # Enable pgvector extension at database level
-            await test_conn.execute('CREATE EXTENSION IF NOT EXISTS vector')
+            await test_conn.execute("CREATE EXTENSION IF NOT EXISTS vector")
         finally:
             await test_conn.close()
 
@@ -120,7 +131,9 @@ async def test_tenant(test_db: str) -> AsyncGenerator[str, None]:
 
 
 @pytest_asyncio.fixture
-async def test_client(test_db: str, test_tenant: str) -> AsyncGenerator[AsyncClient, None]:
+async def test_client(
+    test_db: str, test_tenant: str
+) -> AsyncGenerator[AsyncClient, None]:
     """Create a test client with an isolated tenant schema."""
     # Override the database name for this test
     settings.db_name = test_db
@@ -132,7 +145,7 @@ async def test_client(test_db: str, test_tenant: str) -> AsyncGenerator[AsyncCli
         async with AsyncClient(
             transport=test_client.transport,
             base_url="http://test",
-            headers={"X-API-Key": settings.api_key or "test-key"}
+            headers={"X-API-Key": settings.api_key or "test-key"},
         ) as client:
             # Store tenant name for tests to use
             client.test_tenant = test_tenant
@@ -149,6 +162,7 @@ def mock_embedding():
 @pytest.fixture
 def mock_ollama_response(monkeypatch):
     """Mock Ollama API responses."""
+
     async def mock_post(*args, **kwargs):
         class MockResponse:
             def json(self):

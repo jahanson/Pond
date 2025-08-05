@@ -1,4 +1,5 @@
 """Tests for domain models."""
+
 import pytest
 
 from pond.domain import MAX_CONTENT_LENGTH, Action, Entity, Memory, Tag, ValidationError
@@ -99,7 +100,7 @@ class TestMemory:
             "python tips",
             "Python Tips",  # Duplicate
             Tag("tips python"),  # Also duplicate
-            "machine learning"
+            "machine learning",
         )
 
         # Should only have 2 unique tags (normalized)
@@ -130,7 +131,10 @@ class TestMemory:
 
         assert data["id"] == 42
         assert data["content"] == "Test memory"
-        assert data["metadata"]["tags"] == ["python", "test"]  # Sorted, and "testing" normalized to "test"
+        assert data["metadata"]["tags"] == [
+            "python",
+            "test",
+        ]  # Sorted, and "testing" normalized to "test"
         assert data["metadata"]["entities"] == [{"text": "Python", "type": "LANGUAGE"}]
         assert data["metadata"]["actions"] == [{"lemma": "test"}]
         assert data["forgotten"] is False
@@ -147,7 +151,7 @@ class TestMemory:
                 "tags": ["python", "testing"],  # List from DB
                 "entities": [{"text": "Python", "type": "LANGUAGE"}],
                 "actions": [{"lemma": "test"}],
-            }
+            },
         }
 
         memory = Memory.from_dict(data)
@@ -236,7 +240,9 @@ class TestDomainModelInteraction:
         memory.add_tags("cats", "sparkle theft", "funny")
 
         # Simulate what the repository would do
-        memory.add_entity(Entity("Sparkle", "PERSON"))  # Cat names often recognized as PERSON
+        memory.add_entity(
+            Entity("Sparkle", "PERSON")
+        )  # Cat names often recognized as PERSON
         memory.add_entity(Entity("yesterday", "DATE"))
         memory.add_action(Action("steal"))
 

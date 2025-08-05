@@ -1,6 +1,5 @@
 """Integration tests for MemoryRepository with real database."""
 
-import numpy as np
 import pendulum
 import pytest
 
@@ -8,12 +7,13 @@ from pond.domain import Memory, MemoryRepository
 
 # Import test fixtures are used as pytest fixture parameters below
 from tests.fixtures.database import test_db_pool, test_tenant  # noqa: F401
+from tests.fixtures.embeddings import mock_embedding_provider  # noqa: F401
 
 
 @pytest.fixture
-async def test_repository(test_db_pool, test_tenant):
+async def test_repository(test_db_pool, test_tenant, mock_embedding_provider):  # noqa: F811
     """Create a test repository with database."""
-    repo = MemoryRepository(test_db_pool, test_tenant)
+    repo = MemoryRepository(test_db_pool, test_tenant, mock_embedding_provider)
     yield repo
     # Cleanup handled by test_tenant fixture
 
@@ -43,8 +43,6 @@ async def test_store_and_retrieve_memory(test_repository):
     assert splash == []
 
 
-
-
 @pytest.mark.asyncio
 async def test_search_mechanics(test_repository):
     """Test search method executes without errors (not testing embedding quality)."""
@@ -69,13 +67,15 @@ async def test_get_recent_memories(test_repository):
     # Old memory (2 hours ago)
     old_memory = Memory(content="Old memory")
     old_memory.metadata["created_at"] = now.subtract(hours=2).isoformat()
-    old_memory.embedding = np.random.rand(768)
+    old_memory.embedding = await test_repository.embedding_provider.embed("Old memory")
     await test_repository._store_in_db(old_memory)
 
     # Recent memory (30 minutes ago)
     recent_memory = Memory(content="Recent memory")
     recent_memory.metadata["created_at"] = now.subtract(minutes=30).isoformat()
-    recent_memory.embedding = np.random.rand(768)
+    recent_memory.embedding = await test_repository.embedding_provider.embed(
+        "Recent memory"
+    )
     await test_repository._store_in_db(recent_memory)
 
     # Get memories from last hour
@@ -98,7 +98,9 @@ async def test_memory_round_trip(test_repository):
     memory.add_action("verify")
 
     # Store it
-    stored, _ = await test_repository.store(memory.content, ["test", "integration", "database"])
+    stored, _ = await test_repository.store(
+        memory.content, ["test", "integration", "database"]
+    )
 
     # Retrieve it
     recent = await test_repository.get_recent(pendulum.now("UTC").subtract(minutes=1))

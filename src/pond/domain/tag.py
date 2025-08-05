@@ -1,4 +1,5 @@
 """Tag domain model."""
+
 import re
 
 
@@ -18,6 +19,7 @@ class Tag:
         """Lazy load spaCy model once for all tags."""
         if cls._nlp is None:
             import spacy
+
             # Only load what we need for lemmatization
             cls._nlp = spacy.load("en_core_web_lg", disable=["parser", "ner"])
         return cls._nlp
@@ -45,13 +47,13 @@ class Tag:
                 continue
 
             # Clean special characters
-            lemma = re.sub(r'[^a-z0-9-]', '', token.lemma_.strip())
+            lemma = re.sub(r"[^a-z0-9-]", "", token.lemma_.strip())
             if lemma:
                 lemmas.append(lemma)
 
         # If no tokens remain, clean the original
         if not lemmas:
-            cleaned = re.sub(r'[^a-z0-9-]', '', text)
+            cleaned = re.sub(r"[^a-z0-9-]", "", text)
             return cleaned.replace(" ", "-") if cleaned else text.replace(" ", "-")
 
         # Sort alphabetically and join
