@@ -6,6 +6,8 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from pond.api.dependencies import get_repository, get_tenant
 from pond.api.models import (
     MemoryResponse,
+    RecentRequest,
+    RecentResponse,
     SearchRequest,
     SearchResponse,
     StoreRequest,
@@ -173,4 +175,75 @@ async def search_memories(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to search memories",
+        )
+
+
+@router.post("/recent", response_model=RecentResponse)
+async def get_recent_memories(
+    recent_request: RecentRequest,
+    tenant: str = Depends(get_tenant),
+    repository: MemoryRepository = Depends(get_repository),
+) -> RecentResponse:
+    """Get recent memories within a time window.
+    
+    Returns memories from the last N hours (default 24).
+    """
+    try:
+        from datetime import timedelta
+
+        from pond.utils.time_service import TimeService
+
+        # Calculate the time window
+        time_service = TimeService()
+        hours = recent_request.hours if recent_request.hours else 24
+        since = time_service.now() - timedelta(hours=hours)
+
+        logger.info(
+            "fetching_recent_memories",
+            tenant=tenant,
+            hours=hours,
+            limit=recent_request.limit,
+        )
+
+        # Get recent memories
+        memories = await repository.get_recent(
+            since=since,
+            limit=recent_request.limit,
+        )
+
+        logger.info(
+            "recent_memories_fetched",
+            tenant=tenant,
+            count=len(memories),
+        )
+
+        # Convert to response models
+        memory_responses = [MemoryResponse.from_memory(m) for m in memories]
+
+        return RecentResponse(
+            memories=memory_responses,
+            count=len(memory_responses),
+        )
+
+    except ValueError as e:
+        # Validation errors
+        logger.warning(
+            "recent_validation_error",
+            tenant=tenant,
+            error=str(e),
+        )
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(e),
+        )
+    except Exception as e:
+        # Unexpected errors
+        logger.exception(
+            "recent_error",
+            tenant=tenant,
+            error=str(e),
+        )
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to fetch recent memories",
         )
