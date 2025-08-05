@@ -5,6 +5,8 @@ from fastapi import APIRouter, Depends, HTTPException, status
 
 from pond.api.dependencies import get_repository, get_tenant
 from pond.api.models import (
+    InitRequest,
+    InitResponse,
     MemoryResponse,
     RecentRequest,
     RecentResponse,
@@ -246,4 +248,63 @@ async def get_recent_memories(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to fetch recent memories",
+        )
+
+
+@router.post("/init", response_model=InitResponse)
+async def initialize_context(
+    init_request: InitRequest,
+    tenant: str = Depends(get_tenant),
+    repository: MemoryRepository = Depends(get_repository),
+) -> InitResponse:
+    """Initialize context with current time and recent memories.
+    
+    This endpoint is designed for AI assistants to get their initial context.
+    Returns the current time (for temporal awareness) and recent memories.
+    """
+    try:
+        from datetime import timedelta
+        from pond.utils.time_service import TimeService
+        
+        # Get current time
+        time_service = TimeService()
+        current_time = time_service.now()
+        
+        # Get recent memories (last 24 hours, up to 10)
+        since = current_time - timedelta(hours=24)
+        
+        logger.info(
+            "initializing_context",
+            tenant=tenant,
+        )
+        
+        memories = await repository.get_recent(
+            since=since,
+            limit=10,  # Default to 10 recent memories for init
+        )
+        
+        logger.info(
+            "context_initialized",
+            tenant=tenant,
+            memory_count=len(memories),
+        )
+        
+        # Convert to response models
+        memory_responses = [MemoryResponse.from_memory(m) for m in memories]
+        
+        return InitResponse(
+            current_time=current_time,
+            recent_memories=memory_responses,
+        )
+        
+    except Exception as e:
+        # Unexpected errors
+        logger.exception(
+            "init_error",
+            tenant=tenant,
+            error=str(e),
+        )
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to initialize context",
         )
