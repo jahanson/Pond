@@ -20,7 +20,7 @@ async def get_repository(
     db_pool: Annotated[DatabasePool, Depends(get_db_pool)],
 ) -> MemoryRepository:
     """Get repository for a specific tenant.
-    
+
     Creates a MemoryRepository with the tenant's schema and
     appropriate embedding provider.
     """
@@ -44,11 +44,11 @@ async def get_tenant(
     request: Request,
 ) -> str:
     """Get and validate tenant from path and auth.
-    
+
     The AuthenticationMiddleware has already validated that:
     1. The API key is valid for this tenant
     2. The tenant in the URL matches the key's tenant
-    
+
     This dependency just extracts the validated tenant.
     """
     # The middleware stores the authenticated tenant in request.state

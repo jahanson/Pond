@@ -86,7 +86,7 @@ app.add_middleware(LoggingMiddleware)
 app.add_middleware(RequestIDMiddleware)
 
 # Include routes
-from .routes import health, memories
+from .routes import health, memories  # noqa: E402
 
 app.include_router(health.router)
 app.include_router(memories.router)

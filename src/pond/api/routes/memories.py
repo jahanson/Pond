@@ -29,10 +29,10 @@ router = APIRouter(
 async def store_memory(
     store_request: StoreRequest,
     tenant: str = Depends(get_tenant),
-    repository: MemoryRepository = Depends(get_repository),
+    repository: MemoryRepository = Depends(get_repository),  # noqa: B008
 ) -> StoreResponse:
     """Store a new memory and return related memories (splash).
-    
+
     The splash contains semantically similar memories (0.7-0.9 similarity)
     to help maintain context.
     """
@@ -61,7 +61,7 @@ async def store_memory(
         splash_response = [MemoryResponse.from_memory(m) for m in splash_memories]
 
         return StoreResponse(
-            id=memory.id,
+            id=memory.id or 0,  # Should never be None after storage
             splash=splash_response,
         )
 
@@ -75,7 +75,7 @@ async def store_memory(
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=str(e),
-        )
+        ) from e
     except Exception as e:
         # Unexpected errors
         logger.exception(
@@ -86,17 +86,17 @@ async def store_memory(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to store memory",
-        )
+        ) from e
 
 
 @router.post("/search", response_model=SearchResponse)
 async def search_memories(
     search_request: SearchRequest,
     tenant: str = Depends(get_tenant),
-    repository: MemoryRepository = Depends(get_repository),
+    repository: MemoryRepository = Depends(get_repository),  # noqa: B008
 ) -> SearchResponse:
     """Search memories or return recent memories if no query.
-    
+
     Empty query returns recent memories (last 24 hours by default).
     Non-empty query uses unified search across text, features, and semantics.
     """
@@ -166,7 +166,7 @@ async def search_memories(
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=str(e),
-        )
+        ) from e
     except Exception as e:
         # Unexpected errors
         logger.exception(
@@ -177,17 +177,17 @@ async def search_memories(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to search memories",
-        )
+        ) from e
 
 
 @router.post("/recent", response_model=RecentResponse)
 async def get_recent_memories(
     recent_request: RecentRequest,
     tenant: str = Depends(get_tenant),
-    repository: MemoryRepository = Depends(get_repository),
+    repository: MemoryRepository = Depends(get_repository),  # noqa: B008
 ) -> RecentResponse:
     """Get recent memories within a time window.
-    
+
     Returns memories from the last N hours (default 24).
     """
     try:
@@ -237,7 +237,7 @@ async def get_recent_memories(
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=str(e),
-        )
+        ) from e
     except Exception as e:
         # Unexpected errors
         logger.exception(
@@ -248,55 +248,56 @@ async def get_recent_memories(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to fetch recent memories",
-        )
+        ) from e
 
 
 @router.post("/init", response_model=InitResponse)
 async def initialize_context(
     init_request: InitRequest,
     tenant: str = Depends(get_tenant),
-    repository: MemoryRepository = Depends(get_repository),
+    repository: MemoryRepository = Depends(get_repository),  # noqa: B008
 ) -> InitResponse:
     """Initialize context with current time and recent memories.
-    
+
     This endpoint is designed for AI assistants to get their initial context.
     Returns the current time (for temporal awareness) and recent memories.
     """
     try:
         from datetime import timedelta
+
         from pond.utils.time_service import TimeService
-        
+
         # Get current time
         time_service = TimeService()
         current_time = time_service.now()
-        
+
         # Get recent memories (last 24 hours, up to 10)
         since = current_time - timedelta(hours=24)
-        
+
         logger.info(
             "initializing_context",
             tenant=tenant,
         )
-        
+
         memories = await repository.get_recent(
             since=since,
             limit=10,  # Default to 10 recent memories for init
         )
-        
+
         logger.info(
             "context_initialized",
             tenant=tenant,
             memory_count=len(memories),
         )
-        
+
         # Convert to response models
         memory_responses = [MemoryResponse.from_memory(m) for m in memories]
-        
+
         return InitResponse(
             current_time=current_time,
             recent_memories=memory_responses,
         )
-        
+
     except Exception as e:
         # Unexpected errors
         logger.exception(
@@ -307,4 +308,4 @@ async def initialize_context(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to initialize context",
-        )
+        ) from e

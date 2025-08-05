@@ -15,7 +15,7 @@ router = APIRouter(tags=["health"])
 
 
 @router.get("/api/v1/health", response_model=SystemHealthResponse)
-async def health_check(db_pool: DatabasePool = Depends(get_db_pool)) -> SystemHealthResponse:
+async def health_check(db_pool: DatabasePool = Depends(get_db_pool)) -> SystemHealthResponse:  # noqa: B008
     """System health check - no authentication required."""
     # Check database
     try:
@@ -39,18 +39,18 @@ async def health_check(db_pool: DatabasePool = Depends(get_db_pool)) -> SystemHe
 @router.get("/api/v1/{tenant}/health", response_model=TenantHealthResponse)
 async def tenant_health_check(
     tenant: str = Depends(get_tenant),
-    repository: MemoryRepository = Depends(get_repository),
-    db_pool: DatabasePool = Depends(get_db_pool),
+    repository: MemoryRepository = Depends(get_repository),  # noqa: B008
+    db_pool: DatabasePool = Depends(get_db_pool),  # noqa: B008
 ) -> TenantHealthResponse:
     """Tenant-specific health check with statistics."""
     try:
         # Get tenant statistics
         async with db_pool.acquire() as conn:
             stats = await get_tenant_stats(conn, tenant)
-        
+
         # Check embedding health
         embedding_health = get_health_status()
-        
+
         # Parse dates if they exist
         oldest = None
         newest = None
@@ -60,14 +60,14 @@ async def tenant_health_check(
         if stats["newest_memory"]:
             from datetime import datetime
             newest = datetime.fromisoformat(stats["newest_memory"])
-        
+
         logger.info(
             "tenant_health_check",
             tenant=tenant,
             memory_count=stats["memory_count"],
             embedding_count=stats["embedding_count"],
         )
-        
+
         return TenantHealthResponse(
             status="healthy",
             tenant=tenant,
@@ -78,7 +78,7 @@ async def tenant_health_check(
             embedding_provider=embedding_health["provider"],
             embedding_healthy=embedding_health["healthy"],
         )
-        
+
     except Exception as e:
         logger.exception(
             "tenant_health_error",

@@ -31,7 +31,7 @@ class StoreRequest(BaseModel):
 
 class SearchRequest(BaseModel):
     """Request to search memories.
-    
+
     If query is empty or not provided, returns recent memories (same as /init).
     """
 

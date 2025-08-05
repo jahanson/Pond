@@ -3,6 +3,7 @@
 import time
 import uuid
 from collections.abc import Callable
+from typing import ClassVar
 
 import structlog
 from fastapi import Request, Response, status
@@ -98,7 +99,7 @@ class AuthenticationMiddleware(BaseHTTPMiddleware):
     """Check API key authentication and extract tenant."""
 
     # Paths that don't require authentication
-    PUBLIC_PATHS = {
+    PUBLIC_PATHS: ClassVar[set[str]] = {
         "/api/v1/health",
         "/docs",
         "/openapi.json",
