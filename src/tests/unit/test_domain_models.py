@@ -1,7 +1,7 @@
 """Tests for domain models."""
 import pytest
 
-from pond.models import Tag, Entity, Action, Memory, ValidationError, MAX_CONTENT_LENGTH
+from pond.models import Tag, Memory, Entity, Action, ValidationError, MAX_CONTENT_LENGTH
 
 
 class TestTag:
@@ -60,10 +60,11 @@ class TestMemory:
         memory = Memory(content="Sparkle stole pizza from the counter")
         
         assert memory.content == "Sparkle stole pizza from the counter"
-        assert memory.active is True
-        assert memory.tags == []
-        assert memory.entities == []
-        assert memory.actions == []
+        assert memory.forgotten is False
+        assert memory.metadata["tags"] == []
+        assert memory.metadata["entities"] == []
+        assert memory.metadata["actions"] == []
+        assert "created_at" in memory.metadata
     
     def test_memory_validation_on_creation(self):
         """Test that memories validate themselves on creation."""
@@ -101,21 +102,19 @@ class TestMemory:
             "machine learning"
         )
         
-        # Should only have 2 unique tags
-        assert len(memory.tags) == 2
-        
-        # Check the raw forms are preserved
-        raw_tags = [tag.raw for tag in memory.tags]
-        assert "python tips" in raw_tags  # First one wins
-        assert "machine learning" in raw_tags
+        # Should only have 2 unique tags (normalized)
+        tags = memory.get_tags()
+        assert len(tags) == 2
+        assert "python-tip" in tags
+        assert "learn-machine" in tags
     
-    def test_get_normalized_tags(self):
+    def test_get_tags(self):
         """Test getting normalized tag strings."""
         memory = Memory(content="Test")
         memory.add_tags("Python Tips", "debugging sessions", "async programming")
         
-        normalized = memory.get_normalized_tags()
-        assert set(normalized) == {"python-tip", "debugging-session", "async-programming"}
+        tags = memory.get_tags()
+        assert set(tags) == {"python-tip", "debugging-session", "async-programming"}
     
     def test_memory_to_dict(self):
         """Test serializing memory to dictionary."""
@@ -124,17 +123,76 @@ class TestMemory:
             content="Test memory",
         )
         memory.add_tags("python", "testing")
-        memory.entities.append(Entity(text="Python", type="LANGUAGE"))
-        memory.actions.append(Action(lemma="test"))
+        memory.add_entity(Entity("Python", "LANGUAGE"))
+        memory.add_action(Action("test"))
         
         data = memory.to_dict()
         
         assert data["id"] == 42
         assert data["content"] == "Test memory"
-        assert data["tags"] == ["python", "testing"]
-        assert data["entities"] == [{"text": "Python", "type": "LANGUAGE"}]
-        assert data["actions"] == ["test"]
-        assert data["active"] is True
+        assert data["metadata"]["tags"] == ["python", "testing"]
+        assert data["metadata"]["entities"] == [{"text": "Python", "type": "LANGUAGE"}]
+        assert data["metadata"]["actions"] == [{"lemma": "test"}]
+        assert data["forgotten"] is False
+
+
+class TestMetadataItems:
+    """Test Entity and Action smart objects."""
+    
+    def test_entity_behavior(self):
+        """Test Entity smart object methods."""
+        person = Entity("John Doe", "PERSON")
+        location = Entity("New York", "GPE")
+        org = Entity("OpenAI", "ORG")
+        
+        assert person.is_person() is True
+        assert person.is_location() is False
+        assert location.is_location() is True
+        assert org.is_organization() is True
+    
+    def test_entity_serialization(self):
+        """Test Entity serialization/deserialization."""
+        entity = Entity("Sparkle", "PERSON")
+        
+        # Serialize
+        data = entity.to_dict()
+        assert data == {"text": "Sparkle", "type": "PERSON"}
+        
+        # Deserialize
+        restored = Entity.from_dict(data)
+        assert restored.text == "Sparkle"
+        assert restored.type == "PERSON"
+    
+    def test_action_behavior(self):
+        """Test Action smart object methods."""
+        action = Action("steal")
+        helper = Action("be")
+        
+        assert action.is_past_tense_marker() is False
+        assert helper.is_past_tense_marker() is True
+    
+    def test_memory_stores_and_retrieves_smart_objects(self):
+        """Test that Memory can store and retrieve entities/actions."""
+        memory = Memory(content="Test")
+        
+        # Add entities
+        memory.add_entity(Entity("Python", "LANGUAGE"))
+        memory.add_entity(("Sparkle", "PERSON"))  # Also accepts tuple
+        
+        # Add actions
+        memory.add_action(Action("code"))
+        memory.add_action("debug")  # Also accepts string
+        
+        # Retrieve as smart objects
+        entities = memory.get_entities()
+        assert len(entities) == 2
+        assert all(isinstance(e, Entity) for e in entities)
+        assert entities[0].text == "Python"
+        
+        actions = memory.get_actions()
+        assert len(actions) == 2
+        assert all(isinstance(a, Action) for a in actions)
+        assert actions[1].lemma == "debug"
 
 
 class TestDomainModelInteraction:
@@ -148,21 +206,17 @@ class TestDomainModelInteraction:
         memory.add_tags("cats", "sparkle theft", "funny")
         
         # Simulate what the repository would do
-        memory.entities.extend([
-            Entity(text="Sparkle", type="PERSON"),  # Cat names often recognized as PERSON
-            Entity(text="yesterday", type="DATE"),
-        ])
-        
-        memory.actions.extend([
-            Action(lemma="steal"),
-        ])
+        memory.add_entity(Entity("Sparkle", "PERSON"))  # Cat names often recognized as PERSON
+        memory.add_entity(Entity("yesterday", "DATE"))
+        memory.add_action(Action("steal"))
         
         # Check the memory has all features
-        assert len(memory.tags) == 3
-        assert len(memory.entities) == 2
-        assert len(memory.actions) == 1
+        assert len(memory.get_tags()) == 3
+        assert len(memory.metadata["entities"]) == 2
+        assert len(memory.metadata["actions"]) == 1
         
         # Tags should be normalized internally
-        assert "cat" in memory.get_normalized_tags()  # "cats" -> "cat"
-        assert "funny" in memory.get_normalized_tags()
-        assert "sparkle-theft" in memory.get_normalized_tags()
+        tags = memory.get_tags()
+        assert "cat" in tags  # "cats" -> "cat"
+        assert "funny" in tags
+        assert "sparkle-theft" in tags

@@ -1,0 +1,95 @@
+classDiagram
+    %% Protocols
+    class MetadataItem {
+        <<protocol>>
+        +to_dict() dict
+        +from_dict(data) Self
+    }
+
+    %% Domain Objects (Core Business Logic)
+    class Memory {
+        -id: int?
+        -content: str
+        -embedding: ndarray?
+        -forgotten: bool
+        -metadata: dict
+        +validate_content()
+        +add_tag(tag)
+        +add_tags(*tags)
+        +get_tags()
+        +add_entity(entity)
+        +get_entities()
+        +add_action(action)
+        +get_actions()
+        +to_dict()
+    }
+
+    class Tag {
+        -raw: str
+        -_normalized: str?
+        -_nlp: spacy.Model
+        +normalized: str
+        +__eq__()
+        +__hash__()
+        -_normalize()
+    }
+
+    class Entity {
+        +text: str
+        +type: str
+        +is_person()
+        +is_location()
+        +is_organization()
+        +to_dict()
+        +from_dict()
+    }
+
+    class Action {
+        +lemma: str
+        +is_past_tense_marker()
+        +to_dict()
+        +from_dict()
+    }
+
+    %% Repository (Orchestration)
+    class MemoryRepository {
+        -pool: AsyncPool
+        -tenant: str
+        -_nlp: spacy.Model
+        +store(content, tags)
+        +search(query, limit)
+        +get_recent(since, limit)
+        -_extract_features()
+        -_get_embedding()
+        -_store_in_db()
+        -_get_splash()
+    }
+
+    %% Infrastructure Services
+    class TimeService {
+        -timezone: str
+        -geoip_url: str?
+        +now()
+        +format_datetime()
+        +parse_interval()
+        -_detect_timezone()
+    }
+
+    %% Relationships
+    Entity ..|> MetadataItem : implements
+    Action ..|> MetadataItem : implements
+    Memory ..> Tag : uses for normalization
+    Memory ..> Entity : stores/retrieves
+    Memory ..> Action : stores/retrieves
+    MemoryRepository ..> Memory : creates/stores
+    MemoryRepository ..> Tag : creates
+    MemoryRepository ..> Entity : creates
+    MemoryRepository ..> Action : creates
+    MemoryRepository ..> TimeService : uses
+
+    %% Notes
+    note for Memory "Flexible JSONB metadata\nCore fields as columns\nValidates itself"
+    note for Tag "Self-normalizing\nCached computation"
+    note for Entity "Smart object with behavior\nSerializes to JSONB"
+    note for Action "Smart object with behavior\nSerializes to JSONB"
+    note for MemoryRepository "Orchestrates the process\nHandles DB & external services"

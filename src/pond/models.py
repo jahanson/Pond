@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from typing import Protocol, TypeVar
 
 import numpy as np
 import pendulum
@@ -15,6 +16,22 @@ class ValidationError(Exception):
 
 # Constants from the old validation service
 MAX_CONTENT_LENGTH = 7500
+
+
+T = TypeVar('T', bound='MetadataItem')
+
+
+class MetadataItem(Protocol):
+    """Protocol for items that can be stored in Memory metadata."""
+
+    def to_dict(self) -> dict:
+        """Serialize to dict for JSONB storage."""
+        ...
+
+    @classmethod
+    def from_dict(cls: type[T], data: dict) -> T:
+        """Hydrate from JSONB storage."""
+        ...
 
 
 class Tag:
@@ -93,42 +110,68 @@ class Tag:
 
 @dataclass
 class Entity:
-    """An entity extracted from memory content."""
+    """An entity extracted from text."""
     text: str
     type: str  # PERSON, ORG, LOC, etc.
 
-    def __str__(self) -> str:
-        return self.text
+    def is_person(self) -> bool:
+        """Check if this is a person entity."""
+        return self.type in ["PERSON", "PER"]
+
+    def is_location(self) -> bool:
+        """Check if this is a location entity."""
+        return self.type in ["LOC", "GPE", "FAC"]
+
+    def is_organization(self) -> bool:
+        """Check if this is an organization entity."""
+        return self.type in ["ORG", "COMPANY"]
+
+    def to_dict(self) -> dict:
+        """Serialize for JSONB storage."""
+        return {"text": self.text, "type": self.type}
+
+    @classmethod
+    def from_dict(cls, data: dict) -> Entity:
+        """Hydrate from JSONB storage."""
+        return cls(text=data["text"], type=data["type"])
 
 
 @dataclass
 class Action:
-    """An action (verb) extracted from memory content."""
-    lemma: str  # Base form of the verb
+    """An action (verb) extracted from text."""
+    lemma: str
 
-    def __str__(self) -> str:
-        return self.lemma
+    def is_past_tense_marker(self) -> bool:
+        """Check if this is a common past tense helper verb."""
+        return self.lemma in ["be", "have", "do", "will", "would", "could", "should"]
+
+    def to_dict(self) -> dict:
+        """Serialize for JSONB storage."""
+        return {"lemma": self.lemma}
+
+    @classmethod
+    def from_dict(cls, data: dict) -> Action:
+        """Hydrate from JSONB storage."""
+        return cls(lemma=data["lemma"])
 
 
 @dataclass
 class Memory:
-    """A single memory with all its extracted features."""
+    """A single memory with flexible metadata storage."""
 
-    # Core fields
+    # Core fields (as columns)
     id: int | None = None
     content: str = ""
-    created_at: DateTime = field(default_factory=lambda: pendulum.now("UTC"))
-
-    # Extracted features
-    tags: list[Tag] = field(default_factory=list)
-    entities: list[Entity] = field(default_factory=list)
-    actions: list[Action] = field(default_factory=list)
-
-    # Embedding (set later)
     embedding: np.ndarray | None = None
+    forgotten: bool = False
 
-    # Metadata
-    active: bool = True
+    # Flexible metadata (JSONB)
+    metadata: dict = field(default_factory=lambda: {
+        "created_at": pendulum.now("UTC").isoformat(),
+        "tags": [],
+        "entities": [],
+        "actions": [],
+    })
 
     def __post_init__(self):
         """Validate the memory after creation."""
@@ -163,30 +206,67 @@ class Memory:
 
         return content
 
+    def add_tag(self, tag: str | Tag) -> None:
+        """Add a tag to metadata, normalized and deduplicated."""
+        if isinstance(tag, str):
+            tag = Tag(tag)
+
+        if "tags" not in self.metadata:
+            self.metadata["tags"] = []
+
+        normalized = tag.normalized
+        if normalized not in self.metadata["tags"]:
+            self.metadata["tags"].append(normalized)
+
     def add_tags(self, *tags: str | Tag) -> None:
-        """Add tags, deduplicating in normalized space."""
+        """Add multiple tags."""
         for tag in tags:
-            if isinstance(tag, str):
-                tag = Tag(tag)
+            self.add_tag(tag)
 
-            # Only add if not already present (uses Tag.__eq__)
-            if tag not in self.tags:
-                self.tags.append(tag)
+    def get_tags(self) -> list[str]:
+        """Get all normalized tags."""
+        return self.metadata.get("tags", [])
 
-    def get_normalized_tags(self) -> list[str]:
-        """Get all normalized tag strings."""
-        return [tag.normalized for tag in self.tags]
+    def add_entity(self, entity: Entity | tuple[str, str]) -> None:
+        """Add an entity to metadata."""
+        if isinstance(entity, tuple):
+            entity = Entity(text=entity[0], type=entity[1])
+
+        if "entities" not in self.metadata:
+            self.metadata["entities"] = []
+
+        serialized = entity.to_dict()
+        if serialized not in self.metadata["entities"]:
+            self.metadata["entities"].append(serialized)
+
+    def get_entities(self) -> list[Entity]:
+        """Get entities as smart objects."""
+        return [Entity.from_dict(e) for e in self.metadata.get("entities", [])]
+
+    def add_action(self, action: Action | str) -> None:
+        """Add an action to metadata."""
+        if isinstance(action, str):
+            action = Action(lemma=action)
+
+        if "actions" not in self.metadata:
+            self.metadata["actions"] = []
+
+        serialized = action.to_dict()
+        if serialized not in self.metadata["actions"]:
+            self.metadata["actions"].append(serialized)
+
+    def get_actions(self) -> list[Action]:
+        """Get actions as smart objects."""
+        return [Action.from_dict(a) for a in self.metadata.get("actions", [])]
 
     def to_dict(self) -> dict:
         """Convert to dictionary for JSON serialization."""
         return {
             "id": self.id,
             "content": self.content,
-            "created_at": self.created_at.isoformat(),
-            "tags": [tag.raw for tag in self.tags],
-            "entities": [{"text": e.text, "type": e.type} for e in self.entities],
-            "actions": [action.lemma for action in self.actions],
-            "active": self.active,
+            "embedding": self.embedding.tolist() if self.embedding is not None else None,
+            "forgotten": self.forgotten,
+            "metadata": self.metadata,
         }
 
 
@@ -239,19 +319,20 @@ class MemoryRepository:
 
         # Extract entities
         for ent in doc.ents:
-            memory.entities.append(Entity(text=ent.text, type=ent.label_))
+            memory.add_entity(Entity(text=ent.text, type=ent.label_))
 
         # Extract actions (verbs)
         for token in doc:
             if token.pos_ == "VERB" and not token.is_stop:
-                memory.actions.append(Action(lemma=token.lemma_))
+                memory.add_action(Action(lemma=token.lemma_))
 
         # Generate auto-tags (3-5 from entities and noun chunks)
         auto_tags = []
 
         # Add entity-based tags
-        for ent in memory.entities[:3]:
-            auto_tags.append(ent.text)
+        entities = memory.metadata.get("entities", [])
+        for ent in entities[:3]:
+            auto_tags.append(ent["text"])
 
         # Add noun chunk tags
         for chunk in doc.noun_chunks:
