@@ -95,13 +95,18 @@ class MemoryResponse(BaseModel):
         actions = []
         if memory.metadata:
             tags = memory.metadata.get("tags", [])
-            actions = memory.metadata.get("actions", [])
+            # Actions come as list of dicts with 'lemma' key
+            actions_raw = memory.metadata.get("actions", [])
+            if actions_raw and isinstance(actions_raw[0], dict):
+                actions = [a.get("lemma", str(a)) for a in actions_raw]
+            else:
+                actions = actions_raw
 
         # Get created_at from metadata - it should already be a datetime from the database
         created_at = memory.metadata.get("created_at") if memory.metadata else None
         if not isinstance(created_at, datetime):
             # This shouldn't happen - database always has created_at
-            from pond.services.time_service import TimeService
+            from pond.utils.time_service import TimeService
             created_at = TimeService().now()
 
         return cls(
