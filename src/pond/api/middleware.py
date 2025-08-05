@@ -11,6 +11,7 @@ from fastapi.responses import JSONResponse
 from starlette.middleware.base import BaseHTTPMiddleware
 
 from pond.config import settings
+from pond.infrastructure.auth import APIKeyManager
 
 logger = structlog.get_logger()
 
@@ -96,7 +97,7 @@ class ErrorHandlingMiddleware(BaseHTTPMiddleware):
 
 
 class AuthenticationMiddleware(BaseHTTPMiddleware):
-    """Check API key authentication."""
+    """Check API key authentication and extract tenant."""
 
     # Paths that don't require authentication
     PUBLIC_PATHS = {
@@ -107,14 +108,22 @@ class AuthenticationMiddleware(BaseHTTPMiddleware):
     }
 
     async def dispatch(self, request: Request, call_next: Callable) -> Response:
-        """Check API key in header."""
+        """Check API key and extract tenant from it."""
         # Skip auth for public paths
         if request.url.path in self.PUBLIC_PATHS:
             return await call_next(request)
         
-        # Skip auth if no API key is configured (development mode)
-        if not settings.api_key:
-            logger.warning("API key not configured - authentication disabled")
+        # Check if we're in development mode (no auth)
+        # This is determined by checking if any API keys exist in the database
+        # We'll handle this check in the lifespan/startup
+        if hasattr(request.app.state, "auth_disabled") and request.app.state.auth_disabled:
+            # Extract tenant from URL path for development
+            # Path format: /api/v1/{tenant}/...
+            path_parts = request.url.path.strip("/").split("/")
+            if len(path_parts) >= 3 and path_parts[0] == "api" and path_parts[1] == "v1":
+                request.state.tenant = path_parts[2]
+            else:
+                request.state.tenant = None
             return await call_next(request)
         
         # Check API key header
@@ -126,11 +135,28 @@ class AuthenticationMiddleware(BaseHTTPMiddleware):
                 content={"error": "Unauthorized"},
             )
         
-        # Constant-time comparison to prevent timing attacks
-        if not secrets.compare_digest(provided_key, settings.api_key):
+        # Validate key and get tenant
+        api_key_manager: APIKeyManager = request.app.state.api_key_manager
+        tenant = await api_key_manager.validate_key(provided_key)
+        
+        if not tenant:
             return JSONResponse(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 content={"error": "Unauthorized"},
             )
+        
+        # Store tenant in request state for use by endpoints
+        request.state.tenant = tenant
+        
+        # Also validate that the tenant in the URL matches the key's tenant
+        # Path format: /api/v1/{tenant}/...
+        path_parts = request.url.path.strip("/").split("/")
+        if len(path_parts) >= 3 and path_parts[0] == "api" and path_parts[1] == "v1":
+            url_tenant = path_parts[2]
+            if url_tenant != tenant:
+                return JSONResponse(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    content={"error": "API key not authorized for this tenant"},
+                )
         
         return await call_next(request)

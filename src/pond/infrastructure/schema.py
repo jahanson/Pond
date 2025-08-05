@@ -62,6 +62,18 @@ async def ensure_tenant_schema(conn: Connection, tenant: str) -> None:
         END $$;
     """)
 
+    # Create api_keys table for tenant authentication
+    await conn.execute("""
+        CREATE TABLE IF NOT EXISTS api_keys (
+            id SERIAL PRIMARY KEY,
+            key_hash VARCHAR(255) NOT NULL UNIQUE,
+            description TEXT,
+            created_at TIMESTAMPTZ DEFAULT NOW(),
+            last_used TIMESTAMPTZ,
+            active BOOLEAN DEFAULT true
+        )
+    """)
+    
     # Create indexes for performance
     # Note: CREATE INDEX IF NOT EXISTS requires PostgreSQL 9.5+
 
