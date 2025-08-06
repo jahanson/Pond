@@ -23,12 +23,7 @@ class MCPSettings(BaseSettings):
     )
     pond_api_key: str = Field(
         ...,
-        description="API key for authenticating with Pond"
-    )
-    pond_tenant: str = Field(
-        ...,
-        description="Tenant name for memory storage",
-        examples=["claude", "alpha"]
+        description="API key for authenticating with Pond (determines tenant)"
     )
 
 

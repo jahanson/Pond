@@ -76,7 +76,7 @@ jinja_env.filters['format_datetime'] = format_datetime
 async def make_request(method: str, endpoint: str, json: dict | None = None) -> dict:
     """Make an authenticated request to the Pond API."""
     config = get_config()
-    url = f"{config.pond_url}/api/v1/{config.pond_tenant}/{endpoint}"
+    url = f"{config.pond_url}/api/v1/{endpoint}"
     headers = {"X-API-Key": config.pond_api_key} if config.pond_api_key else {}
     
     async with httpx.AsyncClient() as client:

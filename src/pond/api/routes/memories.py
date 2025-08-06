@@ -1,9 +1,9 @@
 """Memory management API endpoints."""
 
 import structlog
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 
-from pond.api.dependencies import get_repository, get_tenant
+from pond.api.dependencies import get_repository
 from pond.api.models import (
     InitRequest,
     InitResponse,
@@ -20,7 +20,6 @@ from pond.domain.repository import MemoryRepository
 logger = structlog.get_logger()
 
 router = APIRouter(
-    prefix="/{tenant}",
     tags=["memories"],
 )
 
@@ -28,7 +27,7 @@ router = APIRouter(
 @router.post("/store", response_model=StoreResponse)
 async def store_memory(
     store_request: StoreRequest,
-    tenant: str = Depends(get_tenant),
+    request: Request,
     repository: MemoryRepository = Depends(get_repository),  # noqa: B008
 ) -> StoreResponse:
     """Store a new memory and return related memories (splash).
@@ -37,6 +36,9 @@ async def store_memory(
     to help maintain context.
     """
     try:
+        # Get tenant from authenticated request
+        tenant = request.state.tenant
+        
         # Store the memory
         logger.info(
             "storing_memory",
@@ -93,7 +95,7 @@ async def store_memory(
 @router.post("/search", response_model=SearchResponse)
 async def search_memories(
     search_request: SearchRequest,
-    tenant: str = Depends(get_tenant),
+    request: Request,
     repository: MemoryRepository = Depends(get_repository),  # noqa: B008
 ) -> SearchResponse:
     """Search memories or return recent memories if no query.
@@ -102,6 +104,9 @@ async def search_memories(
     Non-empty query uses unified search across text, features, and semantics.
     """
     try:
+        # Get tenant from authenticated request
+        tenant = request.state.tenant
+        
         if not search_request.query:
             # Empty query - return recent memories
             logger.info(
@@ -186,7 +191,7 @@ async def search_memories(
 @router.post("/recent", response_model=RecentResponse)
 async def get_recent_memories(
     recent_request: RecentRequest,
-    tenant: str = Depends(get_tenant),
+    request: Request,
     repository: MemoryRepository = Depends(get_repository),  # noqa: B008
 ) -> RecentResponse:
     """Get recent memories within a time window.
@@ -194,6 +199,9 @@ async def get_recent_memories(
     Returns memories from the last N hours (default 24).
     """
     try:
+        # Get tenant from authenticated request
+        tenant = request.state.tenant
+        
         from datetime import timedelta
 
         from pond.utils.time_service import TimeService
@@ -258,7 +266,7 @@ async def get_recent_memories(
 @router.post("/init", response_model=InitResponse)
 async def initialize_context(
     init_request: InitRequest,
-    tenant: str = Depends(get_tenant),
+    request: Request,
     repository: MemoryRepository = Depends(get_repository),  # noqa: B008
 ) -> InitResponse:
     """Initialize context with current time and recent memories.
@@ -267,6 +275,9 @@ async def initialize_context(
     Returns the current time (for temporal awareness) and recent memories.
     """
     try:
+        # Get tenant from authenticated request
+        tenant = request.state.tenant
+        
         from datetime import timedelta
 
         from pond.utils.time_service import TimeService

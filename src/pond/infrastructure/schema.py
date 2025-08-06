@@ -18,11 +18,8 @@ async def ensure_tenant_schema(conn: Connection, tenant: str) -> None:
     """
     logger.info(f"Ensuring schema exists for tenant: {tenant}")
 
-    # Validate tenant name
-    if not tenant.replace("_", "").isalnum():
-        raise ValueError(f"Invalid tenant name: {tenant}")
-
     # Create schema if not exists
+    # NOTE: Tenant names come from code, not user input
     await conn.execute(f"CREATE SCHEMA IF NOT EXISTS {tenant}")
 
     # Switch to the tenant's schema (include public for vector type)

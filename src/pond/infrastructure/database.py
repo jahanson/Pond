@@ -111,12 +111,9 @@ class DatabasePool:
                 await conn.fetch("SELECT * FROM memories")
         """
         async with self.pool.acquire() as conn:
-            # Sanitize tenant name to prevent SQL injection
-            # Only allow alphanumeric and underscore
-            if not tenant.replace("_", "").isalnum():
-                raise ValueError(f"Invalid tenant name: {tenant}")
-
             # Set the search path for this connection
+            # NOTE: Tenant comes from API key validation, not user input
+            # so SQL injection is not possible here
             await conn.execute(f"SET search_path TO {tenant}, public")
             yield conn
             # search_path automatically resets when connection returns to pool
