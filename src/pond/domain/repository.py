@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
 
@@ -75,7 +76,7 @@ class MemoryRepository:
         memory.add_tags(*user_tags)
 
         # Extract features from content
-        self._extract_features(memory)
+        await self._extract_features(memory)
 
         # Get embedding
         memory.embedding = await self._get_embedding(content)
@@ -88,8 +89,13 @@ class MemoryRepository:
 
         return memory, splash
 
-    def _extract_features(self, memory: Memory) -> None:
+    async def _extract_features(self, memory: Memory) -> None:
         """Extract entities, actions, and auto-tags from memory content."""
+        # Run synchronous spaCy processing in thread pool
+        await asyncio.to_thread(self._extract_features_sync, memory)
+
+    def _extract_features_sync(self, memory: Memory) -> None:
+        """Synchronous feature extraction - runs in thread pool only."""
         doc = self.nlp(memory.content)
 
         # Extract entities
@@ -231,8 +237,8 @@ class MemoryRepository:
             return []
 
         # Scoring weights - tunable in source for easy experimentation
-        TEXT_WEIGHT = 0.4      # Exact/partial text matches  # noqa: N806
-        FEATURE_WEIGHT = 0.2   # Tags/entities/actions  # noqa: N806
+        TEXT_WEIGHT = 0.4  # Exact/partial text matches  # noqa: N806
+        FEATURE_WEIGHT = 0.2  # Tags/entities/actions  # noqa: N806
         SEMANTIC_WEIGHT = 0.4  # Semantic similarity  # noqa: N806
 
         # Get embedding for semantic search
@@ -313,7 +319,9 @@ class MemoryRepository:
 
             return [self._row_to_memory(row) for row in rows]
 
-    async def get_recent(self, tenant: str, since: DateTime, limit: int = 10) -> list[Memory]:
+    async def get_recent(
+        self, tenant: str, since: DateTime, limit: int = 10
+    ) -> list[Memory]:
         """Get recent memories since a given time."""
         async with self.db_pool.acquire_tenant(tenant) as conn:
             rows = await conn.fetch(
