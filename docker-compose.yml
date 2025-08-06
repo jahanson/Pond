@@ -7,4 +7,4 @@ services:
     ports:
       - "${POND_PORT:-${PORT:-19100}}:${CONTAINER_PORT:-8000}"
     restart: "no"  # During development, we want to see crashes immediately
-    command: ["uv", "run", "-m", "pond"]
+    command: ["python", "-m", "pond"]

@@ -7,7 +7,7 @@ from .mock import MockEmbedding
 from .ollama import OllamaEmbedding
 
 
-class EmbeddingNotConfigured(EmbeddingError):
+class EmbeddingNotConfigured(EmbeddingError):  # noqa: N818
     """Raised when embeddings are used but not configured."""
 
     pass

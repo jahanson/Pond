@@ -1,7 +1,7 @@
 [project]
 name = "pond"
-version = "0.1.0"
-description = "Semantic memory system for AI assistants"
+version = "1.0.0"
+description = "Semantic memory system for AI agents"
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
@@ -13,18 +13,17 @@ dependencies = [
     "pydantic>=2.9.0",
     "pydantic-settings>=2.5.0",
     "numpy>=1.26.0",
-    "click>=8.1.0", # For CLI
-    "fastmcp>=0.2.0", # For MCP server
-    "spacy>=3.7.0", # For NLP and entity extraction
-    "inflect>=7.0.0", # For tag normalization
-    "pendulum>=3.0.0", # For datetime parsing and formatting
-    "pytimeparse>=1.1.8",
-    "aiohttp>=3.11.0", # For Ollama HTTP client
-    "structlog>=25.4.0",
-    "fastmcp>=1.0.0", # For MCP server
-    "jinja2>=3.1.0", # For template rendering
-    "alembic>=1.13.0", # For database migrations
-    "greenlet>=3.2.3",
+    "click>=8.1.0",  # For CLI
+    "spacy>=3.7.0",  # For NLP and entity extraction
+    "inflect>=7.0.0",  # For tag normalization
+    "pendulum>=3.0.0",  # For datetime parsing and formatting
+    "pytimeparse>=1.1.8",  # For time parsing
+    "aiohttp>=3.11.0",  # For Ollama HTTP client
+    "structlog>=25.4.0",  # For structured logging
+    "fastmcp>=1.0.0",  # For MCP server
+    "jinja2>=3.1.0",  # For template rendering
+    "alembic>=1.13.0",  # For database migrations
+    "greenlet>=3.2.3",  # SQLAlchemy dependency
     "prometheus-client>=0.21.0",  # For metrics collection
     "prometheus-fastapi-instrumentator>=7.0.0",  # For automatic HTTP metrics
     "PyYAML>=6.0",  # For formatting health output in MCP server
@@ -46,7 +45,7 @@ dev = [
 ]
 
 [tool.pytest.ini_options]
-testpaths = ["src/tests"]
+testpaths = ["tests"]
 pythonpath = ["src"]
 python_files = ["test_*.py"]
 python_classes = ["Test*"]

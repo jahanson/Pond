@@ -11,7 +11,7 @@ from prometheus_fastapi_instrumentator import Instrumentator
 from pond.domain import MemoryRepository
 from pond.infrastructure.auth import APIKeyManager
 from pond.infrastructure.database import DatabasePool
-from pond.startup_check import check_configuration
+from pond.startup_check import check_configuration, run_startup_checks
 
 from .middleware import (
     AuthenticationMiddleware,
@@ -39,7 +39,14 @@ logger = structlog.get_logger()
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Handle application startup and shutdown."""
-    # Run configuration check
+    # Run comprehensive startup checks (vital signs only)
+    if not await run_startup_checks():
+        # Startup checks failed - exit cleanly
+        print("\nStartup failed. Exiting.\n", flush=True)
+        import sys
+        sys.exit(1)
+
+    # Run legacy configuration check
     check_configuration()
 
     # Initialize database pool

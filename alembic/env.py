@@ -68,38 +68,39 @@ def do_run_migrations(connection: Connection) -> None:
 
 async def run_async_migrations() -> None:
     """Run migrations in 'online' mode with async support."""
-    import asyncpg
     from urllib.parse import urlparse
-    
+
+    import asyncpg
+
     # Parse database URL to get connection details
     parsed = urlparse(database_url)
     db_name = parsed.path.lstrip('/')
-    
+
     # Try to create database if it doesn't exist
     try:
         # Connect to postgres database to create our target database
         admin_url = database_url.replace(f"/{db_name}", "/postgres")
         admin_conn = await asyncpg.connect(admin_url.replace("postgresql+asyncpg://", "postgresql://"))
-        
+
         # Check if database exists
         exists = await admin_conn.fetchval(
             "SELECT EXISTS(SELECT 1 FROM pg_database WHERE datname = $1)",
             db_name
         )
-        
+
         if not exists:
             # Create database
             await admin_conn.execute(f'CREATE DATABASE "{db_name}"')
             print(f"Created database: {db_name}")
-        
+
         await admin_conn.close()
     except Exception as e:
         # If we can't create the database, continue anyway - maybe it exists
         print(f"Note: Could not check/create database: {e}")
-    
+
     configuration = config.get_section(config.config_ini_section)
     configuration["sqlalchemy.url"] = database_url
-    
+
     connectable = async_engine_from_config(
         configuration,
         prefix="sqlalchemy.",

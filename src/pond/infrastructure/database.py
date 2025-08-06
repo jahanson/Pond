@@ -129,9 +129,10 @@ class DatabasePool:
         async with self.pool.acquire() as conn:
             self.update_pool_metrics()  # Update metrics after acquiring
             # Set the search path for this connection
-            # NOTE: Tenant comes from API key validation, not user input
-            # so SQL injection is not possible here
-            await conn.execute(f"SET search_path TO {tenant}, public")
+            # Use PostgreSQL's quote_ident for safety, even though tenant
+            # comes from API key validation (defense in depth)
+            quoted_tenant = await conn.fetchval("SELECT quote_ident($1)", tenant)
+            await conn.execute(f"SET search_path TO {quoted_tenant}, public")
             yield conn
             # search_path automatically resets when connection returns to pool
             self.update_pool_metrics()  # Update metrics after releasing

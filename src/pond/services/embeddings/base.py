@@ -11,25 +11,25 @@ class EmbeddingError(Exception):
     pass
 
 
-class EmbeddingServiceUnavailable(EmbeddingError):
+class EmbeddingServiceUnavailable(EmbeddingError):  # noqa: N818
     """Raised when the embedding service is unreachable."""
 
     pass
 
 
-class EmbeddingModelNotFound(EmbeddingError):
+class EmbeddingModelNotFound(EmbeddingError):  # noqa: N818
     """Raised when the requested model doesn't exist."""
 
     pass
 
 
-class EmbeddingTimeout(EmbeddingError):
+class EmbeddingTimeout(EmbeddingError):  # noqa: N818
     """Raised when embedding generation times out."""
 
     pass
 
 
-class EmbeddingInvalidInput(EmbeddingError):
+class EmbeddingInvalidInput(EmbeddingError):  # noqa: N818
     """Raised when input text is invalid (empty, too long, etc.)."""
 
     pass

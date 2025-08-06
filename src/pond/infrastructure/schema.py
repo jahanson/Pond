@@ -18,12 +18,15 @@ async def ensure_tenant_schema(conn: Connection, tenant: str) -> None:
     """
     logger.info(f"Ensuring schema exists for tenant: {tenant}")
 
+    # Use PostgreSQL's quote_ident to safely escape the schema name
+    # This prevents SQL injection even from CLI input
+    quoted_tenant = await conn.fetchval("SELECT quote_ident($1)", tenant)
+
     # Create schema if not exists
-    # NOTE: Tenant names come from code, not user input
-    await conn.execute(f"CREATE SCHEMA IF NOT EXISTS {tenant}")
+    await conn.execute(f"CREATE SCHEMA IF NOT EXISTS {quoted_tenant}")
 
     # Switch to the tenant's schema (include public for vector type)
-    await conn.execute(f"SET search_path TO {tenant}, public")
+    await conn.execute(f"SET search_path TO {quoted_tenant}, public")
 
     # Create the memories table with all our features
     await conn.execute("""

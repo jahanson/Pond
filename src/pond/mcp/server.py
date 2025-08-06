@@ -37,6 +37,7 @@ jinja_env = Environment(
     loader=FileSystemLoader(template_dir),
     trim_blocks=True,
     lstrip_blocks=True,
+    autoescape=True,  # Security: prevent XSS
 )
 
 # Initialize TimeService
@@ -100,7 +101,7 @@ def render_template(template_name: str, data: dict[str, Any]) -> str:
 
 
 @mcp.tool(name="store")
-async def store(content: str, tags: list[str] = Field(default_factory=list)) -> str:
+async def store(content: str, tags: list[str] = Field(default_factory=list)) -> str:  # noqa: B008
     """
     Store a new memory with optional tags.
 
