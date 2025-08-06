@@ -6,6 +6,7 @@ from contextlib import asynccontextmanager
 import structlog
 from fastapi import FastAPI
 
+from pond.domain import MemoryRepository
 from pond.infrastructure.auth import APIKeyManager
 from pond.infrastructure.database import DatabasePool
 from pond.infrastructure.schema import list_tenants
@@ -36,7 +37,7 @@ logger = structlog.get_logger()
 
 class HealthCheckFilter(logging.Filter):
     """Filter out health check logs from uvicorn."""
-    
+
     def filter(self, record: logging.LogRecord) -> bool:
         """Return False to suppress health check logs."""
         if hasattr(record, 'args') and record.args:
@@ -64,6 +65,12 @@ async def lifespan(app: FastAPI):
 
     # Initialize API key manager
     app.state.api_key_manager = APIKeyManager(app.state.db_pool)
+
+    # Initialize singleton MemoryRepository
+    logger.info("initializing_memory_repository")
+    app.state.memory_repository = MemoryRepository(app.state.db_pool)
+    logger.info("memory_repository_ready",
+                spacy_model_loaded=bool(app.state.memory_repository._nlp))
 
     # Check if we should disable auth (development mode)
     # We'll disable auth if no API keys exist in any tenant
@@ -114,7 +121,7 @@ app = FastAPI(
     redoc_url=None,  # Disable redoc at root
 )
 
-# Mount v1 API  
+# Mount v1 API
 # Share the main app's state with the sub-app
 api_v1.state = app.state
 app.mount("/api/v1", api_v1)

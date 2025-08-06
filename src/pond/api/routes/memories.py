@@ -46,6 +46,7 @@ async def store_memory(
         )
 
         memory, splash_memories = await repository.store(
+            tenant=tenant,
             content=store_request.content,
             user_tags=store_request.tags,
         )
@@ -118,6 +119,7 @@ async def search_memories(
             since = time_service.now() - timedelta(hours=24)
 
             memories = await repository.get_recent(
+                tenant=tenant,
                 since=since,
                 limit=search_request.limit,
             )
@@ -137,6 +139,7 @@ async def search_memories(
             )
 
             memories = await repository.search(
+                tenant=tenant,
                 query=search_request.query,
                 limit=search_request.limit,
             )
@@ -209,6 +212,7 @@ async def get_recent_memories(
 
         # Get recent memories
         memories = await repository.get_recent(
+            tenant=tenant,
             since=since,
             limit=recent_request.limit,
         )
@@ -280,6 +284,7 @@ async def initialize_context(
         )
 
         memories = await repository.get_recent(
+            tenant=tenant,
             since=since,
             limit=10,  # Default to 10 recent memories for init
         )

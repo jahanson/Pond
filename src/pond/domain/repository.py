@@ -27,12 +27,10 @@ class MemoryRepository:
     def __init__(
         self,
         db_pool: DatabasePool,
-        tenant: str,
         embedding_provider: EmbeddingProvider | None = None,
     ):
-        """Initialize with database pool and tenant name."""
+        """Initialize with database pool."""
         self.db_pool = db_pool
-        self.tenant = tenant
         self._nlp = None
         self._embedding_provider = embedding_provider
         self._provider_error = None
@@ -63,7 +61,7 @@ class MemoryRepository:
         return self._embedding_provider
 
     async def store(
-        self, content: str, user_tags: list[str]
+        self, tenant: str, content: str, user_tags: list[str]
     ) -> tuple[Memory, list[Memory]]:
         """Store a memory and return it with splash memories.
 
@@ -83,10 +81,10 @@ class MemoryRepository:
         memory.embedding = await self._get_embedding(content)
 
         # Store in database
-        memory.id = await self._store_in_db(memory)
+        memory.id = await self._store_in_db(tenant, memory)
 
         # Get splash
-        splash = await self._get_splash(memory)
+        splash = await self._get_splash(tenant, memory)
 
         return memory, splash
 
@@ -160,9 +158,9 @@ class MemoryRepository:
         """Get embedding from configured provider."""
         return await self.embedding_provider.embed(content)
 
-    async def _store_in_db(self, memory: Memory) -> int:
+    async def _store_in_db(self, tenant: str, memory: Memory) -> int:
         """Store memory in database, return ID."""
-        async with self.db_pool.acquire_tenant(self.tenant) as conn:
+        async with self.db_pool.acquire_tenant(tenant) as conn:
             # Convert numpy array to list for storage
             embedding_list = (
                 memory.embedding.tolist() if memory.embedding is not None else None
@@ -189,7 +187,7 @@ class MemoryRepository:
             )
             return row["id"]
 
-    async def _get_splash(self, memory: Memory) -> list[Memory]:
+    async def _get_splash(self, tenant: str, memory: Memory) -> list[Memory]:
         """Get memories in the similarity sweet spot (0.7-0.9).
 
         Returns up to 3 memories with similarity between 0.7 and 0.9.
@@ -198,7 +196,7 @@ class MemoryRepository:
         if memory.embedding is None:
             return []
 
-        async with self.db_pool.acquire_tenant(self.tenant) as conn:
+        async with self.db_pool.acquire_tenant(tenant) as conn:
             # pgvector uses <=> for cosine distance (0 = identical, 2 = opposite)
             # similarity = 1 - distance, so:
             # distance < 0.3 means similarity > 0.7
@@ -220,9 +218,9 @@ class MemoryRepository:
 
             return [self._row_to_memory(row) for row in rows]
 
-    async def search(self, query: str, limit: int = 10) -> list[Memory]:
+    async def search(self, tenant: str, query: str, limit: int = 10) -> list[Memory]:
         """Unified search across text, features, and semantic similarity.
-        
+
         Combines three search methods with weighted scoring:
         - Full-text search on content
         - Feature matching on tags, entities, actions
@@ -243,7 +241,7 @@ class MemoryRepository:
         # Normalize query for feature matching (lowercase, lemmatized)
         query_lower = query.lower()
 
-        async with self.db_pool.acquire_tenant(self.tenant) as conn:
+        async with self.db_pool.acquire_tenant(tenant) as conn:
             rows = await conn.fetch(
                 """
                 WITH text_search AS (
@@ -288,7 +286,7 @@ class MemoryRepository:
                 ),
                 combined_scores AS (
                     -- Combine all searches with weighted scoring
-                    SELECT 
+                    SELECT
                         COALESCE(t.id, f.id, s.id) as id,
                         (COALESCE(t.score, 0) * $4) +
                         (COALESCE(f.score, 0) * $5) +
@@ -315,9 +313,9 @@ class MemoryRepository:
 
             return [self._row_to_memory(row) for row in rows]
 
-    async def get_recent(self, since: DateTime, limit: int = 10) -> list[Memory]:
+    async def get_recent(self, tenant: str, since: DateTime, limit: int = 10) -> list[Memory]:
         """Get recent memories since a given time."""
-        async with self.db_pool.acquire_tenant(self.tenant) as conn:
+        async with self.db_pool.acquire_tenant(tenant) as conn:
             rows = await conn.fetch(
                 """
                 SELECT id, content, embedding, metadata

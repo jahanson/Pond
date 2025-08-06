@@ -3,9 +3,8 @@
 import structlog
 from fastapi import APIRouter, Depends
 
-from pond.api.dependencies import get_db_pool, get_repository, get_tenant
+from pond.api.dependencies import get_db_pool, get_tenant
 from pond.api.models import SystemHealthResponse, TenantHealthResponse
-from pond.domain.repository import MemoryRepository
 from pond.infrastructure.database import DatabasePool
 from pond.infrastructure.schema import get_tenant_stats
 from pond.startup_check import get_health_status
@@ -39,7 +38,6 @@ async def health_check(db_pool: DatabasePool = Depends(get_db_pool)) -> SystemHe
 @router.get("/{tenant}/health", response_model=TenantHealthResponse)
 async def tenant_health_check(
     tenant: str = Depends(get_tenant),
-    repository: MemoryRepository = Depends(get_repository),  # noqa: B008
     db_pool: DatabasePool = Depends(get_db_pool),  # noqa: B008
 ) -> TenantHealthResponse:
     """Tenant-specific health check with statistics."""
