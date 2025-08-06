@@ -27,6 +27,7 @@ dependencies = [
     "greenlet>=3.2.3",
     "prometheus-client>=0.21.0",  # For metrics collection
     "prometheus-fastapi-instrumentator>=7.0.0",  # For automatic HTTP metrics
+    "PyYAML>=6.0",  # For formatting health output in MCP server
 ]
 
 [project.scripts]

@@ -4,12 +4,7 @@ services:
       context: .
       dockerfile: Dockerfile
     container_name: pond-api
-    env_file:
-      - .env
     ports:
-      - "${PORT:-19100}:8000"
+      - "${POND_PORT:-${PORT:-19100}}:${CONTAINER_PORT:-8000}"
     restart: "no"  # During development, we want to see crashes immediately
-    # For development with hot-reload, uncomment:
-    # volumes:
-    #   - ./src:/app/src:ro
-    # command: ["uvicorn", "pond.api.main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]
+    command: ["uv", "run", "-m", "pond"]

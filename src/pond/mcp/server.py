@@ -8,6 +8,7 @@ from pathlib import Path
 from typing import Any
 
 import httpx
+import yaml
 from fastmcp import FastMCP
 from jinja2 import Environment, FileSystemLoader
 from pydantic import Field
@@ -154,22 +155,11 @@ async def health() -> str:
 
     Returns memory counts, embedding status, and date ranges.
     """
-    # Get both system and tenant health
-    system_health = await make_request("GET", "../health", None)
+    # Get health status - tenant is determined by the API key
+    health_data = await make_request("GET", "health", None)
 
-    # For tenant health, we need to adjust the URL
-    config = get_config()
-    url = f"{config.pond_url}/api/v1/{config.pond_tenant}/health"
-    headers = {"X-API-Key": config.pond_api_key} if config.pond_api_key else {}
-
-    async with httpx.AsyncClient() as client:
-        response = await client.get(url, headers=headers)
-        response.raise_for_status()
-        tenant_health = response.json()
-
-    return render_template(
-        "health.md.j2", {"system": system_health, "tenant": tenant_health}
-    )
+    # Convert to YAML for clean, human-readable output
+    return yaml.dump(health_data, default_flow_style=False, sort_keys=False)
 
 
 if __name__ == "__main__":

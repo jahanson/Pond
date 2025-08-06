@@ -1,6 +1,6 @@
 """Configuration management for Pond."""
 
-from pydantic import field_validator, model_validator
+from pydantic import AliasChoices, Field, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -27,7 +27,11 @@ class Settings(BaseSettings):
 
     # API
     host: str = "0.0.0.0"
-    port: int = 8000
+    port: int = Field(
+        default=19100,
+        validation_alias=AliasChoices("port", "pond_port"),
+        description="API port (checks PORT, then POND_PORT, defaults to 19100)",
+    )
     debug: bool = False
 
     # External services
