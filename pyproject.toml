@@ -25,6 +25,8 @@ dependencies = [
     "jinja2>=3.1.0", # For template rendering
     "alembic>=1.13.0", # For database migrations
     "greenlet>=3.2.3",
+    "prometheus-client>=0.21.0",  # For metrics collection
+    "prometheus-fastapi-instrumentator>=7.0.0",  # For automatic HTTP metrics
 ]
 
 [project.scripts]

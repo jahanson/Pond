@@ -4,6 +4,9 @@ from contextlib import asynccontextmanager
 
 import structlog
 from fastapi import FastAPI
+from fastapi.responses import Response
+from prometheus_client import REGISTRY, generate_latest
+from prometheus_fastapi_instrumentator import Instrumentator
 
 from pond.domain import MemoryRepository
 from pond.infrastructure.auth import APIKeyManager
@@ -101,3 +104,26 @@ app.add_middleware(AuthenticationMiddleware)
 app.add_middleware(ErrorHandlingMiddleware)
 app.add_middleware(LoggingMiddleware)
 app.add_middleware(RequestIDMiddleware)
+
+# Add Prometheus instrumentation for automatic HTTP metrics
+instrumentator = Instrumentator(
+    should_group_status_codes=True,
+    should_ignore_untemplated=True,
+    should_respect_env_var=True,  # Respects ENABLE_METRICS env var
+    should_instrument_requests_inprogress=True,
+    excluded_handlers=["/metrics"],  # Don't track metrics endpoint itself
+    env_var_name="ENABLE_METRICS",
+    inprogress_name="pond_http_requests_inprogress",
+    inprogress_labels=True,
+)
+
+# Instrument the app for automatic HTTP metrics
+instrumentator.instrument(app)
+
+
+# Add metrics endpoint manually to ensure it's accessible
+@app.get("/metrics", include_in_schema=False)
+async def get_metrics() -> Response:
+    """Prometheus metrics endpoint."""
+    metrics = generate_latest(REGISTRY)
+    return Response(content=metrics, media_type="text/plain; version=0.0.4")

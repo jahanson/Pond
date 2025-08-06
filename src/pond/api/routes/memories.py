@@ -16,6 +16,12 @@ from pond.api.models import (
     StoreResponse,
 )
 from pond.domain.repository import MemoryRepository
+from pond.metrics import (
+    memories_stored,
+    memory_store_duration,
+    search_duration,
+    searches_performed,
+)
 
 logger = structlog.get_logger()
 
@@ -39,7 +45,7 @@ async def store_memory(
         # Get tenant from authenticated request
         tenant = request.state.tenant
 
-        # Store the memory
+        # Store the memory with metrics tracking
         logger.info(
             "storing_memory",
             tenant=tenant,
@@ -47,11 +53,15 @@ async def store_memory(
             tag_count=len(store_request.tags),
         )
 
-        memory, splash_memories = await repository.store(
-            tenant=tenant,
-            content=store_request.content,
-            user_tags=store_request.tags,
-        )
+        with memory_store_duration.labels(tenant=tenant).time():
+            memory, splash_memories = await repository.store(
+                tenant=tenant,
+                content=store_request.content,
+                user_tags=store_request.tags,
+            )
+
+        # Increment the stored memories counter
+        memories_stored.labels(tenant=tenant).inc()
 
         logger.info(
             "memory_stored",
@@ -106,55 +116,60 @@ async def search_memories(
     try:
         # Get tenant from authenticated request
         tenant = request.state.tenant
+        search_type = "recent" if not search_request.query else "semantic"
 
-        if not search_request.query:
-            # Empty query - return recent memories
-            logger.info(
-                "fetching_recent_memories",
-                tenant=tenant,
-                limit=search_request.limit,
-            )
+        with search_duration.labels(tenant=tenant, type=search_type).time():
+            if not search_request.query:
+                # Empty query - return recent memories
+                logger.info(
+                    "fetching_recent_memories",
+                    tenant=tenant,
+                    limit=search_request.limit,
+                )
 
-            # Get memories from last 24 hours
-            from datetime import timedelta
+                # Get memories from last 24 hours
+                from datetime import timedelta
 
-            from pond.utils.time_service import TimeService
+                from pond.utils.time_service import TimeService
 
-            time_service = TimeService()
-            since = time_service.now() - timedelta(hours=24)
+                time_service = TimeService()
+                since = time_service.now() - timedelta(hours=24)
 
-            memories = await repository.get_recent(
-                tenant=tenant,
-                since=since,
-                limit=search_request.limit,
-            )
+                memories = await repository.get_recent(
+                    tenant=tenant,
+                    since=since,
+                    limit=search_request.limit,
+                )
 
-            logger.info(
-                "recent_memories_fetched",
-                tenant=tenant,
-                count=len(memories),
-            )
-        else:
-            # Search with query
-            logger.info(
-                "searching_memories",
-                tenant=tenant,
-                query=search_request.query,
-                limit=search_request.limit,
-            )
+                logger.info(
+                    "recent_memories_fetched",
+                    tenant=tenant,
+                    count=len(memories),
+                )
+            else:
+                # Search with query
+                logger.info(
+                    "searching_memories",
+                    tenant=tenant,
+                    query=search_request.query,
+                    limit=search_request.limit,
+                )
 
-            memories = await repository.search(
-                tenant=tenant,
-                query=search_request.query,
-                limit=search_request.limit,
-            )
+                memories = await repository.search(
+                    tenant=tenant,
+                    query=search_request.query,
+                    limit=search_request.limit,
+                )
 
-            logger.info(
-                "search_completed",
-                tenant=tenant,
-                query=search_request.query,
-                result_count=len(memories),
-            )
+                logger.info(
+                    "search_completed",
+                    tenant=tenant,
+                    query=search_request.query,
+                    result_count=len(memories),
+                )
+
+        # Increment search counter
+        searches_performed.labels(tenant=tenant, type=search_type).inc()
 
         # Convert to response models
         memory_responses = [MemoryResponse.from_memory(m) for m in memories]
@@ -218,12 +233,16 @@ async def get_recent_memories(
             limit=recent_request.limit,
         )
 
-        # Get recent memories
-        memories = await repository.get_recent(
-            tenant=tenant,
-            since=since,
-            limit=recent_request.limit,
-        )
+        # Get recent memories with metrics tracking
+        with search_duration.labels(tenant=tenant, type="recent").time():
+            memories = await repository.get_recent(
+                tenant=tenant,
+                since=since,
+                limit=recent_request.limit,
+            )
+
+        # Track this as a recent search
+        searches_performed.labels(tenant=tenant, type="recent").inc()
 
         logger.info(
             "recent_memories_fetched",

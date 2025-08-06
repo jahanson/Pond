@@ -108,6 +108,7 @@ class AuthenticationMiddleware(BaseHTTPMiddleware):
         "/api/v1/openapi.json",
         "/api/v1/redoc",
         "/favicon.ico",  # Browser auto-requests this
+        "/metrics",  # Prometheus endpoint must be public
     }
 
     async def dispatch(self, request: Request, call_next: Callable) -> Response:

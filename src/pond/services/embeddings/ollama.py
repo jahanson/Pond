@@ -7,6 +7,7 @@ import aiohttp
 import numpy as np
 
 from pond.config import settings
+from pond.metrics import embedding_duration
 
 from .base import (
     EmbeddingInvalidInput,
@@ -54,36 +55,39 @@ class OllamaEmbedding:
             raise EmbeddingInvalidInput(f"Text too long: {len(text)} chars (max 50000)")
 
         try:
-            async with aiohttp.ClientSession() as session:
-                async with session.post(
-                    f"{self.url}/api/embeddings",
-                    json={"model": self.model, "prompt": text},
-                    timeout=aiohttp.ClientTimeout(total=self.timeout),
-                ) as response:
-                    if response.status == 404:
-                        # Model not found
-                        error_data = await response.json()
-                        raise EmbeddingModelNotFound(
-                            f"Model '{self.model}' not found: {error_data.get('error', 'Unknown error')}"
-                        )
-                    elif response.status != 200:
-                        # Other errors
-                        try:
+            with embedding_duration.labels(provider="ollama").time():
+                async with aiohttp.ClientSession() as session:
+                    async with session.post(
+                        f"{self.url}/api/embeddings",
+                        json={"model": self.model, "prompt": text},
+                        timeout=aiohttp.ClientTimeout(total=self.timeout),
+                    ) as response:
+                        if response.status == 404:
+                            # Model not found
                             error_data = await response.json()
-                            error_msg = error_data.get("error", "Unknown error")
-                        except Exception:
-                            error_msg = f"HTTP {response.status}"
-                        raise EmbeddingServiceUnavailable(f"Ollama error: {error_msg}")
+                            raise EmbeddingModelNotFound(
+                                f"Model '{self.model}' not found: {error_data.get('error', 'Unknown error')}"
+                            )
+                        elif response.status != 200:
+                            # Other errors
+                            try:
+                                error_data = await response.json()
+                                error_msg = error_data.get("error", "Unknown error")
+                            except Exception:
+                                error_msg = f"HTTP {response.status}"
+                            raise EmbeddingServiceUnavailable(
+                                f"Ollama error: {error_msg}"
+                            )
 
-                    # Success
-                    data = await response.json()
-                    embedding = np.array(data["embedding"], dtype=np.float32)
+                        # Success
+                        data = await response.json()
+                        embedding = np.array(data["embedding"], dtype=np.float32)
 
-                    # Store dimension on first successful call
-                    if self._dimension is None:
-                        self._dimension = len(embedding)
+                        # Store dimension on first successful call
+                        if self._dimension is None:
+                            self._dimension = len(embedding)
 
-                    return embedding
+                        return embedding
 
         except TimeoutError as e:
             raise EmbeddingTimeout(

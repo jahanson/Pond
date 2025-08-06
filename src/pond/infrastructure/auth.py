@@ -45,7 +45,8 @@ class APIKeyManager:
                 VALUES ($1, $2, true)
                 """,
                 key_hash,
-                description or f"API key created at {datetime.now(datetime.UTC).isoformat()}",
+                description
+                or f"API key created at {datetime.now(datetime.UTC).isoformat()}",
             )
 
         return api_key

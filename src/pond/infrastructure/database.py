@@ -10,6 +10,7 @@ import asyncpg
 from asyncpg import Connection, Pool
 
 from pond.config import settings
+from pond.metrics import database_pool_connections
 
 logger = logging.getLogger(__name__)
 
@@ -76,6 +77,19 @@ class DatabasePool:
             await self._pool.close()
             logger.info("Database pool closed")
 
+    def update_pool_metrics(self) -> None:
+        """Update connection pool metrics for Prometheus."""
+        if self._pool:
+            # Get pool statistics
+            size = self._pool.get_size()  # Total connections
+            idle = self._pool.get_idle_size()  # Idle connections
+            active = size - idle  # Active connections
+
+            # Update Prometheus gauges
+            database_pool_connections.labels(state="active").set(active)
+            database_pool_connections.labels(state="idle").set(idle)
+            database_pool_connections.labels(state="total").set(size)
+
     @property
     def pool(self) -> Pool:
         """Get the connection pool."""
@@ -94,7 +108,9 @@ class DatabasePool:
                 await conn.fetch("SELECT * FROM memories")
         """
         async with self.pool.acquire() as conn:
+            self.update_pool_metrics()  # Update metrics after acquiring
             yield conn
+            self.update_pool_metrics()  # Update metrics after releasing
 
     @asynccontextmanager
     async def acquire_tenant(self, tenant: str) -> AsyncIterator[Connection]:
@@ -111,12 +127,14 @@ class DatabasePool:
                 await conn.fetch("SELECT * FROM memories")
         """
         async with self.pool.acquire() as conn:
+            self.update_pool_metrics()  # Update metrics after acquiring
             # Set the search path for this connection
             # NOTE: Tenant comes from API key validation, not user input
             # so SQL injection is not possible here
             await conn.execute(f"SET search_path TO {tenant}, public")
             yield conn
             # search_path automatically resets when connection returns to pool
+            self.update_pool_metrics()  # Update metrics after releasing
 
 
 # Global pool instance

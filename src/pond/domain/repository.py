@@ -10,6 +10,7 @@ import numpy as np
 from pendulum import DateTime
 
 from pond.infrastructure.database import DatabasePool
+from pond.metrics import current_memory_count, database_operation_duration
 from pond.services.embeddings import (
     EmbeddingNotConfigured,
     EmbeddingProvider,
@@ -81,11 +82,17 @@ class MemoryRepository:
         # Get embedding
         memory.embedding = await self._get_embedding(content)
 
-        # Store in database
-        memory.id = await self._store_in_db(tenant, memory)
+        # Store in database with metrics tracking
+        with database_operation_duration.labels(
+            operation="store", tenant=tenant
+        ).time():
+            memory.id = await self._store_in_db(tenant, memory)
 
         # Get splash
         splash = await self._get_splash(tenant, memory)
+
+        # Update memory count gauge
+        await self._update_memory_count(tenant)
 
         return memory, splash
 
@@ -224,6 +231,14 @@ class MemoryRepository:
 
             return [self._row_to_memory(row) for row in rows]
 
+    async def _update_memory_count(self, tenant: str) -> None:
+        """Update the memory count gauge for a tenant."""
+        async with self.db_pool.acquire_tenant(tenant) as conn:
+            count = await conn.fetchval(
+                "SELECT COUNT(*) FROM memories WHERE NOT forgotten"
+            )
+            current_memory_count.labels(tenant=tenant).set(count or 0)
+
     async def search(self, tenant: str, query: str, limit: int = 10) -> list[Memory]:
         """Unified search across text, features, and semantic similarity.
 
@@ -247,9 +262,13 @@ class MemoryRepository:
         # Normalize query for feature matching (lowercase, lemmatized)
         query_lower = query.lower()
 
-        async with self.db_pool.acquire_tenant(tenant) as conn:
-            rows = await conn.fetch(
-                """
+        # Track search operation timing
+        with database_operation_duration.labels(
+            operation="search", tenant=tenant
+        ).time():
+            async with self.db_pool.acquire_tenant(tenant) as conn:
+                rows = await conn.fetch(
+                    """
                 WITH text_search AS (
                     -- Full-text search using tsvector
                     SELECT id,
@@ -308,14 +327,14 @@ class MemoryRepository:
                 ORDER BY c.final_score DESC
                 LIMIT $7
                 """,
-                query,  # $1 - for text search
-                query_lower,  # $2 - for feature matching
-                query_embedding.tolist(),  # $3 - for semantic search
-                TEXT_WEIGHT,  # $4
-                FEATURE_WEIGHT,  # $5
-                SEMANTIC_WEIGHT,  # $6
-                limit,  # $7
-            )
+                    query,  # $1 - for text search
+                    query_lower,  # $2 - for feature matching
+                    query_embedding.tolist(),  # $3 - for semantic search
+                    TEXT_WEIGHT,  # $4
+                    FEATURE_WEIGHT,  # $5
+                    SEMANTIC_WEIGHT,  # $6
+                    limit,  # $7
+                )
 
             return [self._row_to_memory(row) for row in rows]
 
@@ -323,21 +342,24 @@ class MemoryRepository:
         self, tenant: str, since: DateTime, limit: int = 10
     ) -> list[Memory]:
         """Get recent memories since a given time."""
-        async with self.db_pool.acquire_tenant(tenant) as conn:
-            rows = await conn.fetch(
-                """
-                SELECT id, content, embedding, metadata
-                FROM memories
-                WHERE NOT forgotten
-                AND (metadata->>'created_at')::timestamptz >= $1
-                ORDER BY (metadata->>'created_at')::timestamptz DESC
-                LIMIT $2
-                """,
-                since,  # asyncpg handles datetime serialization
-                limit,
-            )
+        with database_operation_duration.labels(
+            operation="get_recent", tenant=tenant
+        ).time():
+            async with self.db_pool.acquire_tenant(tenant) as conn:
+                rows = await conn.fetch(
+                    """
+                    SELECT id, content, embedding, metadata
+                    FROM memories
+                    WHERE NOT forgotten
+                    AND (metadata->>'created_at')::timestamptz >= $1
+                    ORDER BY (metadata->>'created_at')::timestamptz DESC
+                    LIMIT $2
+                    """,
+                    since,  # asyncpg handles datetime serialization
+                    limit,
+                )
 
-            return [self._row_to_memory(row) for row in rows]
+                return [self._row_to_memory(row) for row in rows]
 
     def _row_to_memory(self, row: dict) -> Memory:
         """Convert a database row to a Memory object."""

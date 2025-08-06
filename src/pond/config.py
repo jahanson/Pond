@@ -26,7 +26,9 @@ class Settings(BaseSettings):
     db_pool_timeout: int = 30
 
     # API
+    host: str = "0.0.0.0"
     port: int = 8000
+    debug: bool = False
 
     # External services
     ollama_url: str = "http://localhost:11434"
