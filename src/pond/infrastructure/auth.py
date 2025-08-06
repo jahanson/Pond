@@ -75,27 +75,19 @@ class APIKeyManager:
         # Check each tenant's api_keys table
         for tenant in tenants:
             async with self.db_pool.acquire_tenant(tenant) as conn:
-                # Check if key exists and is active
-                result = await conn.fetchval(
+                # Atomically update last_used and check if key exists in one operation
+                # This avoids the race condition between SELECT and UPDATE
+                update_result = await conn.execute(
                     """
-                    SELECT EXISTS(
-                        SELECT 1 FROM api_keys
-                        WHERE key_hash = $1 AND active = true
-                    )
+                    UPDATE api_keys
+                    SET last_used = NOW()
+                    WHERE key_hash = $1 AND active = true
                     """,
                     key_hash,
                 )
 
-                if result:
-                    # Update last_used timestamp
-                    await conn.execute(
-                        """
-                        UPDATE api_keys
-                        SET last_used = NOW()
-                        WHERE key_hash = $1
-                        """,
-                        key_hash,
-                    )
+                # If we updated a row, the key exists and is active
+                if update_result != "UPDATE 0":
                     return tenant
 
         raise ValueError("API key not found or inactive")
