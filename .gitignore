@@ -38,3 +38,6 @@ docker-compose.override.yml
 
 # Static build output (will be built during deployment)
 src/pond/static/
+
+# Claude Code
+.claude/

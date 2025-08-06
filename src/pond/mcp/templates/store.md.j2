@@ -1,0 +1,7 @@
+{% if splash %}
+{% for memory in splash %}
+{{ memory.created_at | format_age }}
+{{ memory.content }}
+
+{% endfor %}
+{% endif %}

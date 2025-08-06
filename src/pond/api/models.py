@@ -102,12 +102,20 @@ class MemoryResponse(BaseModel):
             else:
                 actions = actions_raw
 
-        # Get created_at from metadata - it should already be a datetime from the database
-        created_at = memory.metadata.get("created_at") if memory.metadata else None
-        if not isinstance(created_at, datetime):
-            # This shouldn't happen - database always has created_at
-            from pond.utils.time_service import TimeService
-            created_at = TimeService().now()
+        # Get created_at from metadata - it's stored as an ISO string in JSONB
+        created_at_str = memory.metadata.get("created_at") if memory.metadata else None
+        if not created_at_str:
+            raise ValueError(f"Memory {memory.id} has no created_at timestamp")
+        
+        # Parse the ISO string to datetime
+        if isinstance(created_at_str, str):
+            from dateutil.parser import isoparse
+            # Use dateutil which returns a standard datetime
+            created_at = isoparse(created_at_str)
+        elif isinstance(created_at_str, datetime):
+            created_at = created_at_str
+        else:
+            raise ValueError(f"Memory {memory.id} has invalid created_at: {created_at_str!r}")
 
         return cls(
             id=memory.id,

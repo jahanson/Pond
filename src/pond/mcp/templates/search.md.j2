@@ -1,0 +1,25 @@
+## Search Results
+
+Found {{ count }} matching {{ 'memory' if count == 1 else 'memories' }}.
+
+{% for memory in memories %}
+### {{ loop.index }}. Memory {{ memory.id }}
+
+{{ memory.content }}
+
+*Stored {{ memory.created_at | format_age }}*
+
+{% if memory.tags %}
+**Tags:** {{ memory.tags | join(', ') }}
+{% endif %}
+
+{% if memory.entities %}
+**Entities:** {% for entity in memory.entities %}{{ entity.text }} ({{ entity.type }}){% if not loop.last %}, {% endif %}{% endfor %}
+{% endif %}
+
+{% if memory.actions %}
+**Actions:** {{ memory.actions | join(', ') }}
+{% endif %}
+
+---
+{% endfor %}

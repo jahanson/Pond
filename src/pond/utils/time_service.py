@@ -93,26 +93,14 @@ class TimeService:
 
         return f"{time_str} {period[0]}.m. {tz_abbr}"
 
-    def format_age(
-        self, dt: datetime | DateTime, now: datetime | DateTime | None = None
-    ) -> str:
+    def format_age(self, dt: datetime | DateTime) -> str:
         """Format as relative time like '5 minutes ago' or 'in 1 hour'."""
         if not isinstance(dt, DateTime):
             dt = pendulum.instance(dt)
 
-        if now is None:
-            now = self.now()
-        elif not isinstance(now, DateTime):
-            now = pendulum.instance(now)
-
-        # Use Pendulum's built-in diff_for_humans() method
-        return dt.diff_for_humans(now)
-
-    def format_relative(
-        self, dt: datetime | DateTime, now: datetime | DateTime | None = None
-    ) -> str:
-        """Alias for format_age for more intuitive naming."""
-        return self.format_age(dt, now)
+        # diff_for_humans() without arguments compares to current time
+        # and returns "X ago" for past times, "in X" for future times
+        return dt.diff_for_humans()
 
     def parse_interval(self, interval: str) -> pendulum.Duration:
         """Parse human-friendly intervals like '6 hours' or 'last week'.

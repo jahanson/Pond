@@ -21,11 +21,14 @@ dependencies = [
     "pytimeparse>=1.1.8",
     "aiohttp>=3.11.0", # For Ollama HTTP client
     "structlog>=25.4.0",
+    "fastmcp>=1.0.0", # For MCP server
+    "jinja2>=3.1.0", # For template rendering
+    "alembic>=1.13.0", # For database migrations
+    "greenlet>=3.2.3",
 ]
 
 [project.scripts]
 pond = "pond.cli.main:cli"
-pond-mcp = "pond.mcp.server:main"
 
 [project.optional-dependencies]
 test = [

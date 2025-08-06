@@ -1,0 +1,11 @@
+**Current Time:** {{ current_time | format_datetime }}
+
+### Recent Memories
+
+{% if recent_memories %}
+{% for memory in recent_memories %}
+{{ memory.created_at | format_age }}
+{{ memory.content }}
+
+{% endfor %}
+{% endif %}
