@@ -29,7 +29,7 @@ class APIKeyManager:
         """Hash an API key for storage."""
         return hashlib.sha256(api_key.encode()).hexdigest()
 
-    async def create_key(self, tenant: str, description: str = None) -> str:
+    async def create_key(self, tenant: str, description: str | None = None) -> str:
         """Create a new API key for a tenant.
 
         Returns:
@@ -45,21 +45,24 @@ class APIKeyManager:
                 VALUES ($1, $2, true)
                 """,
                 key_hash,
-                description or f"API key created at {datetime.utcnow().isoformat()}",
+                description or f"API key created at {datetime.now(datetime.UTC).isoformat()}",
             )
 
         return api_key
 
-    async def validate_key(self, api_key: str) -> str | None:
+    async def validate_key(self, api_key: str) -> str:
         """Validate an API key and return the tenant name if valid.
 
         This checks ALL tenant schemas to find which tenant owns the key.
 
         Returns:
-            Tenant name if valid, None otherwise
+            Tenant name if valid
+
+        Raises:
+            ValueError: If the API key is invalid or not found
         """
         if not api_key or not api_key.startswith(self.KEY_PREFIX):
-            return None
+            raise ValueError("Invalid API key format")
 
         key_hash = self.hash_key(api_key)
 
@@ -76,7 +79,7 @@ class APIKeyManager:
                 result = await conn.fetchval(
                     """
                     SELECT EXISTS(
-                        SELECT 1 FROM api_keys 
+                        SELECT 1 FROM api_keys
                         WHERE key_hash = $1 AND active = true
                     )
                     """,
@@ -87,17 +90,17 @@ class APIKeyManager:
                     # Update last_used timestamp
                     await conn.execute(
                         """
-                        UPDATE api_keys 
-                        SET last_used = NOW() 
+                        UPDATE api_keys
+                        SET last_used = NOW()
                         WHERE key_hash = $1
                         """,
                         key_hash,
                     )
                     return tenant
 
-        return None
+        raise ValueError("API key not found or inactive")
 
-    async def rotate_key(self, tenant: str, old_api_key: str = None) -> str:
+    async def rotate_key(self, tenant: str, old_api_key: str | None = None) -> str:
         """Create a new key and deactivate the old one.
 
         Args:
@@ -116,8 +119,8 @@ class APIKeyManager:
                     key_hash = self.hash_key(old_api_key)
                     await conn.execute(
                         """
-                        UPDATE api_keys 
-                        SET active = false 
+                        UPDATE api_keys
+                        SET active = false
                         WHERE key_hash = $1
                         """,
                         key_hash,
@@ -126,8 +129,8 @@ class APIKeyManager:
                     # Deactivate all active keys
                     await conn.execute(
                         """
-                        UPDATE api_keys 
-                        SET active = false 
+                        UPDATE api_keys
+                        SET active = false
                         WHERE active = true
                         """
                     )
@@ -162,8 +165,8 @@ class APIKeyManager:
         async with self.db_pool.acquire_tenant(tenant) as conn:
             result = await conn.execute(
                 """
-                UPDATE api_keys 
-                SET active = false 
+                UPDATE api_keys
+                SET active = false
                 WHERE id = $1 AND active = true
                 """,
                 key_id,

@@ -44,16 +44,16 @@ async def ensure_tenant_schema(conn: Connection, tenant: str) -> None:
     # Add tsvector column if it doesn't exist (for migration)
     # This handles existing tables that don't have the column yet
     await conn.execute("""
-        DO $$ 
+        DO $$
         BEGIN
             IF NOT EXISTS (
-                SELECT 1 FROM information_schema.columns 
+                SELECT 1 FROM information_schema.columns
                 WHERE table_schema = current_schema()
-                AND table_name = 'memories' 
+                AND table_name = 'memories'
                 AND column_name = 'content_tsv'
             ) THEN
-                ALTER TABLE memories 
-                ADD COLUMN content_tsv tsvector 
+                ALTER TABLE memories
+                ADD COLUMN content_tsv tsvector
                 GENERATED ALWAYS AS (to_tsvector('english', content)) STORED;
             END IF;
         END $$;

@@ -125,10 +125,12 @@ class AuthenticationMiddleware(BaseHTTPMiddleware):
             if provided_key:
                 # Try to validate the key
                 api_key_manager: APIKeyManager = request.app.state.api_key_manager
-                tenant = await api_key_manager.validate_key(provided_key)
-                if tenant:
+                try:
+                    tenant = await api_key_manager.validate_key(provided_key)
                     request.state.tenant = tenant
-                # If invalid key, still allow access (just no tenant info)
+                except ValueError:
+                    # If invalid key, still allow access (just no tenant info)
+                    pass
             return await call_next(request)
 
         # For all other endpoints, API key is required
@@ -142,9 +144,9 @@ class AuthenticationMiddleware(BaseHTTPMiddleware):
 
         # Validate key and get tenant
         api_key_manager: APIKeyManager = request.app.state.api_key_manager
-        tenant = await api_key_manager.validate_key(provided_key)
-
-        if not tenant:
+        try:
+            tenant = await api_key_manager.validate_key(provided_key)
+        except ValueError:
             return JSONResponse(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 content={"error": "Unauthorized"},

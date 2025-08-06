@@ -20,7 +20,7 @@ mcp = FastMCP(
     name="Pond Memory System",
     instructions="""
     This server provides semantic memory storage and retrieval for AI assistants.
-    
+
     Available operations:
     - Store memories with automatic tagging and entity extraction
     - Search memories using semantic similarity and text matching
