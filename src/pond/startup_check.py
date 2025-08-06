@@ -12,7 +12,7 @@ def check_configuration():
     if settings.embedding_provider is None:
         logger.critical(
             "EMBEDDING_PROVIDER not configured",
-            help="Set EMBEDDING_PROVIDER=ollama or EMBEDDING_PROVIDER=mock"
+            help="Set EMBEDDING_PROVIDER=ollama or EMBEDDING_PROVIDER=mock",
         )
         return False
 

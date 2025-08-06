@@ -10,20 +10,18 @@ from pydantic_settings import BaseSettings
 
 class MCPSettings(BaseSettings):
     """Settings for the Pond MCP server."""
-    
+
     model_config = ConfigDict(
         # NO env_file - all config comes from MCP client via environment
         case_sensitive=False
     )
-    
+
     # Settings with sensible defaults
     pond_url: str = Field(
-        default="http://localhost:19100",
-        description="URL of the Pond API server"
+        default="http://localhost:19100", description="URL of the Pond API server"
     )
     pond_api_key: str = Field(
-        ...,
-        description="API key for authenticating with Pond (determines tenant)"
+        ..., description="API key for authenticating with Pond (determines tenant)"
     )
 
 

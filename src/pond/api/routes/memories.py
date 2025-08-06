@@ -38,7 +38,7 @@ async def store_memory(
     try:
         # Get tenant from authenticated request
         tenant = request.state.tenant
-        
+
         # Store the memory
         logger.info(
             "storing_memory",
@@ -106,7 +106,7 @@ async def search_memories(
     try:
         # Get tenant from authenticated request
         tenant = request.state.tenant
-        
+
         if not search_request.query:
             # Empty query - return recent memories
             logger.info(
@@ -201,7 +201,7 @@ async def get_recent_memories(
     try:
         # Get tenant from authenticated request
         tenant = request.state.tenant
-        
+
         from datetime import timedelta
 
         from pond.utils.time_service import TimeService
@@ -277,7 +277,7 @@ async def initialize_context(
     try:
         # Get tenant from authenticated request
         tenant = request.state.tenant
-        
+
         from datetime import timedelta
 
         from pond.utils.time_service import TimeService

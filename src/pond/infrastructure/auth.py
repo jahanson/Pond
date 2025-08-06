@@ -31,7 +31,7 @@ class APIKeyManager:
 
     async def create_key(self, tenant: str, description: str = None) -> str:
         """Create a new API key for a tenant.
-        
+
         Returns:
             The API key (only shown once!)
         """
@@ -45,16 +45,16 @@ class APIKeyManager:
                 VALUES ($1, $2, true)
                 """,
                 key_hash,
-                description or f"API key created at {datetime.utcnow().isoformat()}"
+                description or f"API key created at {datetime.utcnow().isoformat()}",
             )
 
         return api_key
 
     async def validate_key(self, api_key: str) -> str | None:
         """Validate an API key and return the tenant name if valid.
-        
+
         This checks ALL tenant schemas to find which tenant owns the key.
-        
+
         Returns:
             Tenant name if valid, None otherwise
         """
@@ -66,6 +66,7 @@ class APIKeyManager:
         # Get list of all tenants
         async with self.db_pool.acquire() as conn:
             from pond.infrastructure.schema import list_tenants
+
             tenants = await list_tenants(conn)
 
         # Check each tenant's api_keys table
@@ -79,7 +80,7 @@ class APIKeyManager:
                         WHERE key_hash = $1 AND active = true
                     )
                     """,
-                    key_hash
+                    key_hash,
                 )
 
                 if result:
@@ -90,7 +91,7 @@ class APIKeyManager:
                         SET last_used = NOW() 
                         WHERE key_hash = $1
                         """,
-                        key_hash
+                        key_hash,
                     )
                     return tenant
 
@@ -98,12 +99,12 @@ class APIKeyManager:
 
     async def rotate_key(self, tenant: str, old_api_key: str = None) -> str:
         """Create a new key and deactivate the old one.
-        
+
         Args:
             tenant: Tenant name
             old_api_key: If provided, deactivate this specific key
                         If not provided, deactivate all active keys
-        
+
         Returns:
             The new API key
         """
@@ -119,7 +120,7 @@ class APIKeyManager:
                         SET active = false 
                         WHERE key_hash = $1
                         """,
-                        key_hash
+                        key_hash,
                     )
                 else:
                     # Deactivate all active keys
@@ -138,7 +139,7 @@ class APIKeyManager:
 
     async def list_keys(self, tenant: str) -> list[dict]:
         """List all API keys for a tenant (without the actual keys).
-        
+
         Returns:
             List of key metadata (id, description, created_at, last_used, active)
         """
@@ -154,7 +155,7 @@ class APIKeyManager:
 
     async def deactivate_key(self, tenant: str, key_id: int) -> bool:
         """Deactivate a specific key by ID.
-        
+
         Returns:
             True if key was deactivated, False if not found
         """
@@ -165,6 +166,6 @@ class APIKeyManager:
                 SET active = false 
                 WHERE id = $1 AND active = true
                 """,
-                key_id
+                key_id,
             )
             return result != "UPDATE 0"

@@ -114,7 +114,7 @@ class AuthenticationMiddleware(BaseHTTPMiddleware):
         """Check API key and extract tenant from it."""
         # Initialize tenant as None (for public endpoints)
         request.state.tenant = None
-        
+
         # Skip auth for public paths
         if request.url.path in self.PUBLIC_PATHS:
             return await call_next(request)

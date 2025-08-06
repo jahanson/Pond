@@ -8,7 +8,7 @@ services:
       - .env
     ports:
       - "${PORT:-19100}:8000"
-    restart: unless-stopped
+    restart: "no"  # During development, we want to see crashes immediately
     # For development with hot-reload, uncomment:
     # volumes:
     #   - ./src:/app/src:ro

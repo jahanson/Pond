@@ -14,7 +14,7 @@ See @docs/SPEC.md for all the wonderful details.
 - **Ruff must pass cleanly**: Use `# noqa` comments for false positives rather than leaving warnings
 - **Avoid test-driven implementation**: Don't add special cases just to make tests pass
 - **Use battle-tested libraries**: "There ought to be a library" - prefer established solutions over custom code
-- **No comments about removed code**: Don't add comments like "// Removed X" - just remove it
+- **No comments about removed code**: When removing code, just delete it - don't leave comments saying what was removed or why (e.g., no "// Removed X" or "# Filter removed for clarity")
 - **YAGNI philosophy**: Don't over-engineer for unlikely scenarios
 - **Fail fast principle**: Parse errors should throw exceptions, not return None
 

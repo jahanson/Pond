@@ -1,6 +1,5 @@
 """Main FastAPI application."""
 
-import logging
 from contextlib import asynccontextmanager
 
 import structlog
@@ -34,22 +33,6 @@ structlog.configure(
 logger = structlog.get_logger()
 
 
-class HealthCheckFilter(logging.Filter):
-    """Filter out health check logs from uvicorn."""
-
-    def filter(self, record: logging.LogRecord) -> bool:
-        """Return False to suppress health check logs."""
-        if hasattr(record, 'args') and record.args:
-            # Check if this is a uvicorn access log for health endpoint
-            if len(record.args) >= 3 and '/api/v1/health' in str(record.args[2]):
-                return False
-        return True
-
-
-# Apply filter to uvicorn access logger
-logging.getLogger("uvicorn.access").addFilter(HealthCheckFilter())
-
-
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Handle application startup and shutdown."""
@@ -68,8 +51,10 @@ async def lifespan(app: FastAPI):
     # Initialize singleton MemoryRepository
     logger.info("initializing_memory_repository")
     app.state.memory_repository = MemoryRepository(app.state.db_pool)
-    logger.info("memory_repository_ready",
-                spacy_model_loaded=bool(app.state.memory_repository._nlp))
+    logger.info(
+        "memory_repository_ready",
+        spacy_model_loaded=bool(app.state.memory_repository._nlp),
+    )
 
     # API key authentication is always required
     logger.info("API key authentication required for all endpoints")

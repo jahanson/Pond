@@ -28,7 +28,7 @@ logger = structlog.get_logger()
 @click.pass_context
 def cli(ctx):
     """Pond - Semantic memory system for AI assistants.
-    
+
     System administration tool for managing tenants, API keys, and data.
     """
     # Store shared resources in context
@@ -46,6 +46,7 @@ def tenant(ctx):
 @click.pass_context
 def tenant_list(ctx):
     """List all tenants."""
+
     async def _list():
         pool = DatabasePool()
         try:
@@ -70,6 +71,7 @@ def tenant_list(ctx):
 @click.pass_context
 def tenant_create(ctx, name: str, with_key: bool):
     """Create a new tenant."""
+
     async def _create():
         pool = DatabasePool()
         try:
@@ -89,8 +91,7 @@ def tenant_create(ctx, name: str, with_key: bool):
             if with_key:
                 api_key_manager = APIKeyManager(pool)
                 key = await api_key_manager.create_key(
-                    name,
-                    description=f"Initial key for {name}"
+                    name, description=f"Initial key for {name}"
                 )
                 click.echo(f"✓ Generated API key: {key}")
                 click.echo("\n⚠️  Save this key now! It cannot be retrieved later.")
@@ -114,6 +115,7 @@ def key(ctx):
 @click.pass_context
 def key_generate(ctx, tenant: str, description: str | None):
     """Generate a new API key for a tenant."""
+
     async def _generate():
         pool = DatabasePool()
         try:
@@ -144,6 +146,7 @@ def key_generate(ctx, tenant: str, description: str | None):
 @click.pass_context
 def key_list(ctx, tenant: str):
     """List API keys for a tenant."""
+
     async def _list():
         pool = DatabasePool()
         try:
@@ -178,10 +181,13 @@ def key_list(ctx, tenant: str):
 
 @key.command(name="rotate")
 @click.argument("tenant")
-@click.option("--old-key", help="Specific key to rotate (deactivates all if not specified)")
+@click.option(
+    "--old-key", help="Specific key to rotate (deactivates all if not specified)"
+)
 @click.pass_context
 def key_rotate(ctx, tenant: str, old_key: str | None):
     """Rotate API keys for a tenant."""
+
     async def _rotate():
         pool = DatabasePool()
         try:
@@ -218,6 +224,7 @@ def key_rotate(ctx, tenant: str, old_key: str | None):
 @click.pass_context
 def key_deactivate(ctx, tenant: str, key_id: int):
     """Deactivate a specific API key."""
+
     async def _deactivate():
         pool = DatabasePool()
         try:
@@ -234,7 +241,9 @@ def key_deactivate(ctx, tenant: str, key_id: int):
             if await api_key_manager.deactivate_key(tenant, key_id):
                 click.echo(f"✓ Deactivated key {key_id} for tenant '{tenant}'")
             else:
-                click.echo(f"Error: Key {key_id} not found or already inactive.", err=True)
+                click.echo(
+                    f"Error: Key {key_id} not found or already inactive.", err=True
+                )
                 sys.exit(1)
 
         finally:

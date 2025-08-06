@@ -19,7 +19,7 @@ async def health_check(
     db_pool: DatabasePool = Depends(get_db_pool),  # noqa: B008
 ) -> SystemHealthResponse | TenantHealthResponse:
     """Health check - returns different data based on authentication.
-    
+
     - No API key: Returns basic system health
     - Valid API key: Returns system health + tenant-specific stats
     - Invalid API key: Already rejected by middleware (401)
@@ -35,10 +35,10 @@ async def health_check(
     # Check embeddings
     embedding_health = get_health_status()
     embedding_status = "healthy" if embedding_health["healthy"] else "degraded"
-    
+
     # Check if we have an authenticated tenant
     tenant = getattr(request.state, "tenant", None)
-    
+
     if tenant:
         # Authenticated - return tenant-specific health
         try:
@@ -51,9 +51,11 @@ async def health_check(
             newest = None
             if stats["oldest_memory"]:
                 from datetime import datetime
+
                 oldest = datetime.fromisoformat(stats["oldest_memory"])
             if stats["newest_memory"]:
                 from datetime import datetime
+
                 newest = datetime.fromisoformat(stats["newest_memory"])
 
             logger.info(

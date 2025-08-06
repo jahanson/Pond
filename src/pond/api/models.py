@@ -7,6 +7,7 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 # Request models
 
+
 class StoreRequest(BaseModel):
     """Request to store a memory."""
 
@@ -55,10 +56,12 @@ class RecentRequest(BaseModel):
 
 class InitRequest(BaseModel):
     """Request for initialization (empty body expected)."""
+
     pass
 
 
 # Response models
+
 
 class EntityResponse(BaseModel):
     """Entity extracted from memory."""
@@ -106,16 +109,19 @@ class MemoryResponse(BaseModel):
         created_at_str = memory.metadata.get("created_at") if memory.metadata else None
         if not created_at_str:
             raise ValueError(f"Memory {memory.id} has no created_at timestamp")
-        
+
         # Parse the ISO string to datetime
         if isinstance(created_at_str, str):
             from dateutil.parser import isoparse
+
             # Use dateutil which returns a standard datetime
             created_at = isoparse(created_at_str)
         elif isinstance(created_at_str, datetime):
             created_at = created_at_str
         else:
-            raise ValueError(f"Memory {memory.id} has invalid created_at: {created_at_str!r}")
+            raise ValueError(
+                f"Memory {memory.id} has invalid created_at: {created_at_str!r}"
+            )
 
         return cls(
             id=memory.id,
