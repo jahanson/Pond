@@ -94,59 +94,73 @@ class TimeService:
         return f"{time_str} {period[0]}.m. {tz_abbr}"
 
     def format_age(self, dt: datetime | DateTime) -> str:
-        """Format as relative time like '5 minutes ago' or 'in 1 hour'.
+        """Format as relative time with intuitive day references.
         
-        Uses more precise units for better clarity:
-        - Shows hours for 1-47 hours
-        - Shows "2 days ago" not "1 day ago" for day before yesterday
-        - Shows exact days for 2-6 days
-        - Shows weeks for 7+ days
+        Returns different formats based on when the event occurred:
+        - Today: "N minutes/hours ago"
+        - Yesterday: "yesterday, N hours ago"
+        - This week (since Sunday): "Tuesday, N days ago"
+        - Older: "N weeks/months/years ago"
         """
         if not isinstance(dt, DateTime):
             dt = pendulum.instance(dt)
         
-        now = pendulum.now("UTC")
-        diff = now.diff(dt)
+        # Work in local timezone for calendar comparisons
+        dt_local = dt.in_timezone(self.timezone)
+        now_local = pendulum.now(self.timezone)
         
         # Future times
-        if dt > now:
+        if dt_local > now_local:
             return dt.diff_for_humans()
         
-        # Past times - use more precise units
+        # Calculate various differences
+        diff = now_local.diff(dt_local)
         total_hours = diff.total_seconds() / 3600
+        total_minutes = diff.total_seconds() / 60
         
-        if total_hours < 1:
-            # Less than an hour - use minutes
-            minutes = int(diff.total_seconds() / 60)
-            if minutes == 0:
+        # Get calendar boundaries
+        today_start = now_local.start_of('day')
+        yesterday_start = today_start.subtract(days=1)
+        this_week_start = now_local.start_of('week')  # Sunday at midnight
+        
+        # Today (since midnight)
+        if dt_local >= today_start:
+            if total_minutes < 1:
                 return "just now"
-            elif minutes == 1:
-                return "1 minute ago"
+            elif total_minutes < 60:
+                minutes = int(total_minutes)
+                return f"{minutes} minute{'s' if minutes != 1 else ''} ago"
             else:
-                return f"{minutes} minutes ago"
-        elif total_hours < 48:
-            # Less than 48 hours - use hours for precision
+                hours = int(total_hours)
+                return f"{hours} hour{'s' if hours != 1 else ''} ago"
+        
+        # Yesterday (between last midnight and the midnight before)
+        elif dt_local >= yesterday_start:
             hours = int(total_hours)
-            if hours == 1:
-                return "1 hour ago"
-            else:
-                return f"{hours} hours ago"
-        elif diff.days < 7:
-            # Less than a week - use days
-            if diff.days == 2:
-                return "2 days ago"
-            else:
-                return f"{diff.days} days ago"
-        elif diff.days < 30:
-            # Less than a month - use weeks
-            weeks = diff.days // 7
-            if weeks == 1:
-                return "1 week ago"
-            else:
-                return f"{weeks} weeks ago"
+            return f"yesterday, {hours} hour{'s' if hours != 1 else ''} ago"
+        
+        # This week (since Sunday midnight)
+        elif dt_local >= this_week_start:
+            day_name = dt_local.format('dddd')
+            # Calculate days more accurately - from start of that day to now
+            days_since = (now_local.date() - dt_local.date()).days
+            return f"{day_name}, {days_since} day{'s' if days_since != 1 else ''} ago"
+        
+        # Older than this week
         else:
-            # Use the default for months/years
-            return dt.diff_for_humans()
+            weeks = diff.days // 7
+            months = diff.months
+            years = diff.years
+            
+            if years > 0:
+                return f"{years} year{'s' if years != 1 else ''} ago"
+            elif months >= 2:  # Cutoff at 2 months (8 weeks)
+                return f"{months} months ago"
+            elif weeks > 0:
+                return f"{weeks} week{'s' if weeks != 1 else ''} ago"
+            else:
+                # Shouldn't reach here, but fallback to days
+                return f"{diff.days} days ago"
 
     def parse_interval(self, interval: str) -> pendulum.Duration:
         """Parse human-friendly intervals like '6 hours' or 'last week'.
