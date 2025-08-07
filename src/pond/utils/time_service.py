@@ -94,13 +94,59 @@ class TimeService:
         return f"{time_str} {period[0]}.m. {tz_abbr}"
 
     def format_age(self, dt: datetime | DateTime) -> str:
-        """Format as relative time like '5 minutes ago' or 'in 1 hour'."""
+        """Format as relative time like '5 minutes ago' or 'in 1 hour'.
+        
+        Uses more precise units for better clarity:
+        - Shows hours for 1-47 hours
+        - Shows "2 days ago" not "1 day ago" for day before yesterday
+        - Shows exact days for 2-6 days
+        - Shows weeks for 7+ days
+        """
         if not isinstance(dt, DateTime):
             dt = pendulum.instance(dt)
-
-        # diff_for_humans() without arguments compares to current time
-        # and returns "X ago" for past times, "in X" for future times
-        return dt.diff_for_humans()
+        
+        now = pendulum.now("UTC")
+        diff = now.diff(dt)
+        
+        # Future times
+        if dt > now:
+            return dt.diff_for_humans()
+        
+        # Past times - use more precise units
+        total_hours = diff.total_seconds() / 3600
+        
+        if total_hours < 1:
+            # Less than an hour - use minutes
+            minutes = int(diff.total_seconds() / 60)
+            if minutes == 0:
+                return "just now"
+            elif minutes == 1:
+                return "1 minute ago"
+            else:
+                return f"{minutes} minutes ago"
+        elif total_hours < 48:
+            # Less than 48 hours - use hours for precision
+            hours = int(total_hours)
+            if hours == 1:
+                return "1 hour ago"
+            else:
+                return f"{hours} hours ago"
+        elif diff.days < 7:
+            # Less than a week - use days
+            if diff.days == 2:
+                return "2 days ago"
+            else:
+                return f"{diff.days} days ago"
+        elif diff.days < 30:
+            # Less than a month - use weeks
+            weeks = diff.days // 7
+            if weeks == 1:
+                return "1 week ago"
+            else:
+                return f"{weeks} weeks ago"
+        else:
+            # Use the default for months/years
+            return dt.diff_for_humans()
 
     def parse_interval(self, interval: str) -> pendulum.Duration:
         """Parse human-friendly intervals like '6 hours' or 'last week'.
