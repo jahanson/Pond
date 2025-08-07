@@ -37,7 +37,7 @@ jinja_env = Environment(
     loader=FileSystemLoader(template_dir),
     trim_blocks=True,
     lstrip_blocks=True,
-    autoescape=True,  # Security: prevent XSS
+    autoescape=False,  # MCP tools return plain text, not HTML
 )
 
 # Initialize TimeService
