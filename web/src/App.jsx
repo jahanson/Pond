@@ -12,6 +12,7 @@ const COLORS = {
   darkBlue: '#003d5c',
   black: '#000000',
   glowBlue: '#00ffff',
+  additiveOrange: '#ff8833', // Orange with some blue mixed in for proper white hotspots
 }
 
 function FloorGrid() {
@@ -67,7 +68,10 @@ function MemoryDot({ position, memory, onHover, onClick, onDoubleClick, scale = 
     >
       <sphereGeometry args={[0.016 * scale, 8, 8]} />
       <meshBasicMaterial 
-        color={hovered ? COLORS.glowBlue : COLORS.hotOrange}
+        color={hovered ? [0, 1.2, 1.5] : [1.5, 0.7, 0.2]}
+        transparent={false}
+        blending={THREE.AdditiveBlending}
+        depthWrite={false}
       />
     </mesh>
   )
@@ -194,6 +198,12 @@ function WASDControls({ controlsRef }) {
       if (keys['d']) {
         movement.addScaledVector(right, moveSpeed)
       }
+      if (keys['r']) {
+        movement.y += moveSpeed
+      }
+      if (keys['f']) {
+        movement.y -= moveSpeed
+      }
       
       // Move both camera and target to maintain orientation
       camera.position.add(movement)
@@ -244,6 +254,7 @@ function Scene({ memories, onHover, onClick, pointScale, bloomIntensity }) {
           kernelSize={4}
           luminanceThreshold={0.05}
           luminanceSmoothing={0.3}
+          radius={0.5}
           mipmapBlur
         />
       </EffectComposer>
@@ -261,7 +272,7 @@ export default function App() {
   const [hoveredMemory, setHoveredMemory] = useState(null)
   const [selectedMemory, setSelectedMemory] = useState(null)
   const [pointScale, setPointScale] = useState(1)
-  const [bloomIntensity, setBloomIntensity] = useState(2.5)
+  const [bloomIntensity, setBloomIntensity] = useState(5)
 
   const handleAuthenticate = async () => {
     console.log('Authenticating with key:', apiKey.substring(0, 10) + '...')
@@ -515,9 +526,9 @@ export default function App() {
           </label>
           <input
             type="range"
-            min="0.5"
-            max="5"
-            step="0.1"
+            min="5"
+            max="50"
+            step="1"
             value={bloomIntensity}
             onChange={(e) => setBloomIntensity(parseFloat(e.target.value))}
             style={{
@@ -533,7 +544,7 @@ export default function App() {
           fontSize: '10px',
         }}>
           {memories.length} memories<br/>
-          WASD to move • Mouse to orbit
+          WASD+RF to move • Mouse to orbit
         </div>
       </div>
     </div>
