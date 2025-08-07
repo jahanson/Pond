@@ -74,6 +74,8 @@ def format_datetime(dt_str: str) -> str:
 # Register the filters with Jinja2
 jinja_env.filters["format_age"] = format_age
 jinja_env.filters["format_datetime"] = format_datetime
+jinja_env.filters["get_day_label"] = lambda dt_str: time_service.get_day_label(time_service.parse_datetime(dt_str))
+jinja_env.filters["get_date_key"] = lambda dt_str: time_service.get_date_key(time_service.parse_datetime(dt_str))
 
 
 async def make_request(method: str, endpoint: str, json: dict | None = None) -> dict:

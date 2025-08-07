@@ -132,6 +132,33 @@ class TimeService:
 
         return pendulum.duration(seconds=seconds)
 
+    def get_day_label(self, dt: datetime | DateTime) -> str:
+        """Get day label: 'Today', 'Yesterday', or day name (e.g., 'Tuesday')."""
+        if not isinstance(dt, DateTime):
+            dt = pendulum.instance(dt)
+        
+        # Convert to local timezone for comparison
+        dt_local = dt.in_timezone(self.timezone)
+        today = pendulum.now(self.timezone).date()
+        dt_date = dt_local.date()
+        
+        if dt_date == today:
+            return "Today"
+        elif dt_date == today.subtract(days=1):
+            return "Yesterday"
+        else:
+            # Return the day name (Monday, Tuesday, etc.)
+            return dt_local.format("dddd")
+    
+    def get_date_key(self, dt: datetime | DateTime) -> str:
+        """Get date key for grouping (YYYY-MM-DD format)."""
+        if not isinstance(dt, DateTime):
+            dt = pendulum.instance(dt)
+        
+        # Convert to local timezone for consistent grouping
+        dt_local = dt.in_timezone(self.timezone)
+        return dt_local.format("YYYY-MM-DD")
+
     def parse_datetime(self, dt_str: str) -> DateTime:
         """Parse various datetime formats.
 
