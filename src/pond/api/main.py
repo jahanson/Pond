@@ -1,10 +1,12 @@
 """Main FastAPI application."""
 
 from contextlib import asynccontextmanager
+from pathlib import Path
 
 import structlog
 from fastapi import FastAPI
-from fastapi.responses import Response
+from fastapi.responses import FileResponse, Response
+from fastapi.staticfiles import StaticFiles
 from prometheus_client import REGISTRY, generate_latest
 from prometheus_fastapi_instrumentator import Instrumentator
 
@@ -134,3 +136,17 @@ async def get_metrics() -> Response:
     """Prometheus metrics endpoint."""
     metrics = generate_latest(REGISTRY)
     return Response(content=metrics, media_type="text/plain; version=0.0.4")
+
+
+# Secret Easter egg: THE VISUALIZER
+# Check if the built visualizer exists
+visualizer_dist = Path(__file__).parent.parent.parent.parent / "web" / "dist"
+if visualizer_dist.exists():
+    # Serve static files for assets
+    app.mount("/assets", StaticFiles(directory=visualizer_dist / "assets"), name="assets")
+    
+    # Serve index.html at root
+    @app.get("/", include_in_schema=False)
+    async def serve_visualizer():
+        """Secret visualizer at root URL."""
+        return FileResponse(visualizer_dist / "index.html")

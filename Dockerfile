@@ -1,4 +1,12 @@
-# Containerize JUST the REST server
+# Stage 1: Build the frontend
+FROM node:20-slim AS frontend-builder
+WORKDIR /app/web
+COPY web/package*.json ./
+RUN npm ci
+COPY web/ ./
+RUN npm run build
+
+# Stage 2: Build the Python server
 FROM python:3.12-slim
 
 # Install runtime dependencies
@@ -22,6 +30,9 @@ RUN uv pip install --system --no-cache . && \
 
 # Copy application code
 COPY src/ ./src/
+
+# Copy the built visualizer from the frontend stage
+COPY --from=frontend-builder /app/web/dist ./web/dist
 
 # Set Python path
 ENV PYTHONPATH="/app/src:$PYTHONPATH"

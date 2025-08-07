@@ -109,6 +109,7 @@ class AuthenticationMiddleware(BaseHTTPMiddleware):
         "/api/v1/redoc",
         "/favicon.ico",  # Browser auto-requests this
         "/metrics",  # Prometheus endpoint must be public
+        "/",  # Secret visualizer Easter egg
     }
 
     async def dispatch(self, request: Request, call_next: Callable) -> Response:
@@ -116,8 +117,8 @@ class AuthenticationMiddleware(BaseHTTPMiddleware):
         # Initialize tenant as None (for public endpoints)
         request.state.tenant = None
 
-        # Skip auth for public paths
-        if request.url.path in self.PUBLIC_PATHS:
+        # Skip auth for public paths and assets
+        if request.url.path in self.PUBLIC_PATHS or request.url.path.startswith("/assets/"):
             return await call_next(request)
 
         # Special handling for health endpoint - optional auth
