@@ -68,6 +68,9 @@ docker compose up
 ### Manual Installation
 
 ```bash
+export POND_API_KEY=pond_sk_1234567890
+export TENANT_NAME=test_tenant
+
 # Install
 uv pip install -r pyproject.toml
 python -m spacy download en_core_web_lg
@@ -76,10 +79,20 @@ python -m spacy download en_core_web_lg
 uvicorn pond.api.main:app --reload --port 19100
 
 # Run MCP server
-pond-mcp
+uv run python -m pond.mcp
 
-# Use CLI
+# Add MCP Server to Claude Code
+claude mcp add pond --env POND_API_KEY=$POND_API_KEY -- uv run --directory /home/jahanson/dev/Pond python -m pond.mcp
+
+# Pond CLI
+## Use CLI
 pond --help
+
+## create a new tenant
+pond tenant create $TENANT_NAME
+
+## generate a new key
+pond key generate $TENANT_NAME
 ```
 
 ## Docker Configuration
