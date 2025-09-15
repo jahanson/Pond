@@ -4,17 +4,17 @@ Configuration for Pond MCP Server using Pydantic Settings.
 
 from functools import lru_cache
 
-from pydantic import ConfigDict, Field
+from pydantic import Field
 from pydantic_settings import BaseSettings
 
 
 class MCPSettings(BaseSettings):
     """Settings for the Pond MCP server."""
 
-    model_config = ConfigDict(
+    model_config = {
         # NO env_file - all config comes from MCP client via environment
-        case_sensitive=False
-    )
+        "case_sensitive": False
+    }
 
     # Settings with sensible defaults
     pond_url: str = Field(

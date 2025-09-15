@@ -10,6 +10,7 @@ from fastapi.staticfiles import StaticFiles
 from prometheus_client import REGISTRY, generate_latest
 from prometheus_fastapi_instrumentator import Instrumentator
 
+from pond.config import get_settings
 from pond.domain import MemoryRepository
 from pond.infrastructure.auth import APIKeyManager
 from pond.infrastructure.database import DatabasePool
@@ -22,11 +23,18 @@ from .middleware import (
     RequestIDMiddleware,
 )
 
-# Configure structlog for our app only
+# Get settings to configure logging
+settings = get_settings()
+
+# Configure structlog with dynamic log level
+import logging
+logging.basicConfig(level=getattr(logging, settings.log_level.upper()))
+
 structlog.configure(
     processors=[
         structlog.contextvars.merge_contextvars,
         structlog.processors.add_log_level,
+        structlog.processors.TimeStamper(fmt="ISO"),
         structlog.processors.StackInfoRenderer(),
         structlog.dev.ConsoleRenderer(colors=True),
     ],

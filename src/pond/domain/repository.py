@@ -4,11 +4,12 @@ from __future__ import annotations
 
 import asyncio
 import json
-import logging
 
 import numpy as np
+import structlog
 from pendulum import DateTime
 
+from pond.config import get_settings
 from pond.infrastructure.database import DatabasePool
 from pond.metrics import current_memory_count, database_operation_duration
 from pond.services.embeddings import (
@@ -20,7 +21,13 @@ from pond.services.embeddings import (
 from .entities import Action, Entity
 from .memory import Memory
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
+
+
+def _is_verbose_logging() -> bool:
+    """Check if verbose logging is enabled via log level."""
+    settings = get_settings()
+    return settings.log_level.upper() == "DEBUG"
 
 
 class MemoryRepository:
@@ -70,29 +77,202 @@ class MemoryRepository:
         Returns:
             (stored_memory, splash_memories)
         """
+        if _is_verbose_logging():
+            logger.info(
+                "store_memory_start",
+                tenant=tenant,
+                content_length=len(content),
+                user_tag_count=len(user_tags),
+                user_tags=user_tags,
+            )
+
         # Create memory object
-        memory = Memory(content=content)
+        try:
+            memory = Memory(content=content)
+            if _is_verbose_logging():
+                logger.info(
+                    "memory_object_created",
+                    tenant=tenant,
+                    memory_id=id(memory),  # Object ID for tracking
+                )
+        except Exception as e:
+            logger.error(
+                "memory_creation_failed",
+                tenant=tenant,
+                error=str(e),
+                content_preview=content[:100] if content else "<empty>",
+            )
+            raise
 
         # Add user tags
-        memory.add_tags(*user_tags)
+        try:
+            memory.add_tags(*user_tags)
+            if _is_verbose_logging():
+                final_user_tags = memory.get_tags()
+                logger.info(
+                    "user_tags_added",
+                    tenant=tenant,
+                    memory_id=id(memory),
+                    original_tags=user_tags,
+                    normalized_tags=final_user_tags,
+                )
+        except Exception as e:
+            logger.error(
+                "user_tags_failed",
+                tenant=tenant,
+                memory_id=id(memory),
+                error=str(e),
+                user_tags=user_tags,
+            )
+            raise
 
         # Extract features from content
-        await self._extract_features(memory)
+        try:
+            if _is_verbose_logging():
+                logger.info(
+                    "feature_extraction_start",
+                    tenant=tenant,
+                    memory_id=id(memory),
+                )
+            await self._extract_features(memory)
+            if _is_verbose_logging():
+                entities = memory.get_entities()
+                actions = memory.get_actions()
+                all_tags = memory.get_tags()
+                logger.info(
+                    "feature_extraction_complete",
+                    tenant=tenant,
+                    memory_id=id(memory),
+                    entity_count=len(entities),
+                    action_count=len(actions),
+                    total_tag_count=len(all_tags),
+                    entities=[e.text for e in entities],
+                    actions=[a.lemma for a in actions],
+                    final_tags=all_tags,
+                )
+        except Exception as e:
+            logger.error(
+                "feature_extraction_failed",
+                tenant=tenant,
+                memory_id=id(memory),
+                error=str(e),
+                content_preview=content[:200],
+            )
+            raise
 
         # Get embedding
-        memory.embedding = await self._get_embedding(content)
+        try:
+            if _is_verbose_logging():
+                logger.info(
+                    "embedding_generation_start",
+                    tenant=tenant,
+                    memory_id=id(memory),
+                )
+            memory.embedding = await self._get_embedding(content)
+            if _is_verbose_logging():
+                logger.info(
+                    "embedding_generation_complete",
+                    tenant=tenant,
+                    memory_id=id(memory),
+                    embedding_shape=memory.embedding.shape if memory.embedding is not None else None,
+                )
+        except Exception as e:
+            logger.error(
+                "embedding_generation_failed",
+                tenant=tenant,
+                memory_id=id(memory),
+                error=str(e),
+                content_preview=content[:200],
+            )
+            raise
 
         # Store in database with metrics tracking
-        with database_operation_duration.labels(
-            operation="store", tenant=tenant
-        ).time():
-            memory.id = await self._store_in_db(tenant, memory)
+        try:
+            if _is_verbose_logging():
+                logger.info(
+                    "database_store_start",
+                    tenant=tenant,
+                    memory_id=id(memory),
+                )
+            with database_operation_duration.labels(
+                operation="store", tenant=tenant
+            ).time():
+                memory.id = await self._store_in_db(tenant, memory)
+            if _is_verbose_logging():
+                logger.info(
+                    "database_store_complete",
+                    tenant=tenant,
+                    memory_object_id=id(memory),
+                    database_memory_id=memory.id,
+                )
+        except Exception as e:
+            logger.error(
+                "database_store_failed",
+                tenant=tenant,
+                memory_id=id(memory),
+                error=str(e),
+            )
+            raise
 
         # Get splash
-        splash = await self._get_splash(tenant, memory)
+        try:
+            if _is_verbose_logging():
+                logger.info(
+                    "splash_generation_start",
+                    tenant=tenant,
+                    memory_id=memory.id,
+                )
+            splash = await self._get_splash(tenant, memory)
+            if _is_verbose_logging():
+                logger.info(
+                    "splash_generation_complete",
+                    tenant=tenant,
+                    memory_id=memory.id,
+                    splash_count=len(splash),
+                    splash_ids=[s.id for s in splash],
+                )
+        except Exception as e:
+            logger.error(
+                "splash_generation_failed",
+                tenant=tenant,
+                memory_id=memory.id,
+                error=str(e),
+            )
+            # Don't fail the entire operation for splash failures
+            splash = []
+            if _is_verbose_logging():
+                logger.warning(
+                    "splash_defaulted_to_empty",
+                    tenant=tenant,
+                    memory_id=memory.id,
+                )
 
         # Update memory count gauge
-        await self._update_memory_count(tenant)
+        try:
+            await self._update_memory_count(tenant)
+            if _is_verbose_logging():
+                logger.info(
+                    "memory_count_updated",
+                    tenant=tenant,
+                    memory_id=memory.id,
+                )
+        except Exception as e:
+            logger.warning(
+                "memory_count_update_failed",
+                tenant=tenant,
+                memory_id=memory.id,
+                error=str(e),
+            )
+            # Don't fail the operation for metrics failures
+
+        if _is_verbose_logging():
+            logger.info(
+                "store_memory_complete",
+                tenant=tenant,
+                memory_id=memory.id,
+                splash_count=len(splash),
+                total_processing_success=True,
+            )
 
         return memory, splash
 
@@ -169,36 +349,138 @@ class MemoryRepository:
 
     async def _get_embedding(self, content: str) -> np.ndarray:
         """Get embedding from configured provider."""
-        return await self.embedding_provider.embed(content)
+        if _is_verbose_logging():
+            logger.info(
+                "embedding_provider_call_start",
+                content_length=len(content),
+                content_preview=content[:100],
+                provider_type=type(self.embedding_provider).__name__,
+            )
+
+        try:
+            embedding = await self.embedding_provider.embed(content)
+
+            if _is_verbose_logging():
+                logger.info(
+                    "embedding_provider_call_complete",
+                    content_length=len(content),
+                    embedding_shape=embedding.shape if embedding is not None else None,
+                    embedding_dtype=str(embedding.dtype) if embedding is not None else None,
+                )
+
+            return embedding
+
+        except Exception as e:
+            logger.error(
+                "embedding_provider_call_failed",
+                content_length=len(content),
+                content_preview=content[:200],
+                provider_type=type(self.embedding_provider).__name__,
+                error=str(e),
+                error_type=type(e).__name__,
+            )
+            raise
 
     async def _store_in_db(self, tenant: str, memory: Memory) -> int:
         """Store memory in database, return ID."""
+        if _is_verbose_logging():
+            logger.info(
+                "db_connection_acquire_start",
+                tenant=tenant,
+                memory_object_id=id(memory),
+            )
+
         async with self.db_pool.acquire_tenant(tenant) as conn:
-            # Convert numpy array to list for storage
-            embedding_list = (
-                memory.embedding.tolist() if memory.embedding is not None else None
-            )
+            if _is_verbose_logging():
+                logger.info(
+                    "db_connection_acquired",
+                    tenant=tenant,
+                    memory_object_id=id(memory),
+                    connection_info=str(conn)[:100],  # Truncated connection info
+                )
 
-            # Prepare metadata for JSON serialization
-            # Convert sets to lists since sets aren't JSON serializable
-            metadata_for_storage = memory.metadata.copy()
-            if "tags" in metadata_for_storage and isinstance(
-                metadata_for_storage["tags"], set
-            ):
-                metadata_for_storage["tags"] = sorted(metadata_for_storage["tags"])
+            try:
+                # Convert numpy array to list for storage
+                embedding_list = (
+                    memory.embedding.tolist() if memory.embedding is not None else None
+                )
+                if _is_verbose_logging():
+                    logger.info(
+                        "embedding_conversion_complete",
+                        tenant=tenant,
+                        memory_object_id=id(memory),
+                        embedding_length=len(embedding_list) if embedding_list else 0,
+                        has_embedding=embedding_list is not None,
+                    )
 
-            # Store and get the generated ID
-            row = await conn.fetchrow(
-                """
-                INSERT INTO memories (content, embedding, metadata)
-                VALUES ($1, $2, $3::jsonb)
-                RETURNING id
-                """,
-                memory.content,
-                embedding_list,
-                json.dumps(metadata_for_storage),  # Convert dict to JSON string
-            )
-            return row["id"]
+                # Prepare metadata for JSON serialization
+                # Convert sets to lists since sets aren't JSON serializable
+                metadata_for_storage = memory.metadata.copy()
+                if "tags" in metadata_for_storage and isinstance(
+                    metadata_for_storage["tags"], set
+                ):
+                    metadata_for_storage["tags"] = sorted(metadata_for_storage["tags"])
+
+                if _is_verbose_logging():
+                    logger.info(
+                        "metadata_preparation_complete",
+                        tenant=tenant,
+                        memory_object_id=id(memory),
+                        metadata_keys=list(metadata_for_storage.keys()),
+                        tag_count=len(metadata_for_storage.get("tags", [])),
+                        entity_count=len(metadata_for_storage.get("entities", [])),
+                        action_count=len(metadata_for_storage.get("actions", [])),
+                    )
+
+                # Store and get the generated ID
+                if _is_verbose_logging():
+                    logger.info(
+                        "db_insert_start",
+                        tenant=tenant,
+                        memory_object_id=id(memory),
+                        content_length=len(memory.content),
+                    )
+
+                row = await conn.fetchrow(
+                    """
+                    INSERT INTO memories (content, embedding, metadata)
+                    VALUES ($1, $2, $3::jsonb)
+                    RETURNING id
+                    """,
+                    memory.content,
+                    embedding_list,
+                    json.dumps(metadata_for_storage),  # Convert dict to JSON string
+                )
+
+                if row is None:
+                    logger.error(
+                        "db_insert_returned_null",
+                        tenant=tenant,
+                        memory_object_id=id(memory),
+                    )
+                    raise RuntimeError("Database insert returned no row")
+
+                memory_id = row["id"]
+                if _is_verbose_logging():
+                    logger.info(
+                        "db_insert_complete",
+                        tenant=tenant,
+                        memory_object_id=id(memory),
+                        database_memory_id=memory_id,
+                    )
+
+                return memory_id
+
+            except Exception as e:
+                logger.error(
+                    "db_insert_failed",
+                    tenant=tenant,
+                    memory_object_id=id(memory),
+                    error=str(e),
+                    error_type=type(e).__name__,
+                    content_preview=memory.content[:100],
+                )
+                raise
 
     async def _get_splash(self, tenant: str, memory: Memory) -> list[Memory]:
         """Get memories in the similarity sweet spot (0.7-0.9).
@@ -207,29 +489,73 @@ class MemoryRepository:
         Empty list is valid if no memories fall in this range.
         """
         if memory.embedding is None:
+            if _is_verbose_logging():
+                logger.warning(
+                    "splash_skipped_no_embedding",
+                    tenant=tenant,
+                    memory_id=memory.id,
+                )
             return []
 
-        async with self.db_pool.acquire_tenant(tenant) as conn:
-            # pgvector uses <=> for cosine distance (0 = identical, 2 = opposite)
-            # similarity = 1 - distance, so:
-            # distance < 0.3 means similarity > 0.7
-            # distance > 0.1 means similarity < 0.9
-            rows = await conn.fetch(
-                """
-                SELECT id, content, embedding, metadata,
-                       1 - (embedding <=> $1) as similarity
-                FROM memories
-                WHERE NOT forgotten
-                AND embedding IS NOT NULL
-                AND embedding <=> $1 < 0.3  -- similarity > 0.7
-                AND embedding <=> $1 > 0.1  -- similarity < 0.9
-                ORDER BY embedding <=> $1
-                LIMIT 3
-                """,
-                memory.embedding.tolist(),
+        if _is_verbose_logging():
+            logger.info(
+                "splash_query_start",
+                tenant=tenant,
+                memory_id=memory.id,
+                embedding_length=len(memory.embedding),
             )
 
-            return [self._row_to_memory(row) for row in rows]
+        async with self.db_pool.acquire_tenant(tenant) as conn:
+            try:
+                # pgvector uses <=> for cosine distance (0 = identical, 2 = opposite)
+                # similarity = 1 - distance, so:
+                # distance < 0.3 means similarity > 0.7
+                # distance > 0.1 means similarity < 0.9
+                rows = await conn.fetch(
+                    """
+                    SELECT id, content, embedding, metadata,
+                           1 - (embedding <=> $1) as similarity
+                    FROM memories
+                    WHERE NOT forgotten
+                    AND embedding IS NOT NULL
+                    AND embedding <=> $1 < 0.3  -- similarity > 0.7
+                    AND embedding <=> $1 > 0.1  -- similarity < 0.9
+                    ORDER BY embedding <=> $1
+                    LIMIT 3
+                    """,
+                    memory.embedding.tolist(),
+                )
+
+                if _is_verbose_logging():
+                    logger.info(
+                        "splash_query_complete",
+                        tenant=tenant,
+                        memory_id=memory.id,
+                        candidate_count=len(rows),
+                        similarities=[float(row["similarity"]) for row in rows] if rows else [],
+                    )
+
+                splash_memories = [self._row_to_memory(row) for row in rows]
+
+                if _is_verbose_logging():
+                    logger.info(
+                        "splash_conversion_complete",
+                        tenant=tenant,
+                        memory_id=memory.id,
+                        splash_memory_ids=[m.id for m in splash_memories],
+                    )
+
+                return splash_memories
+
+            except Exception as e:
+                logger.error(
+                    "splash_query_failed",
+                    tenant=tenant,
+                    memory_id=memory.id,
+                    error=str(e),
+                    error_type=type(e).__name__,
+                )
+                raise
 
     async def _update_memory_count(self, tenant: str) -> None:
         """Update the memory count gauge for a tenant."""
